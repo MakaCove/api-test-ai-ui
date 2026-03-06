@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.common.ai.AiClientService;
+import org.example.common.constant.AiPrompt;
 import org.example.api.entity.ApiInfo;
 import org.example.api.mapper.ApiInfoMapper;
 import org.example.document.entity.Document;
@@ -45,13 +46,8 @@ public class DocumentAnalyzeService {
         if (raw == null || raw.isBlank()) {
             throw new IllegalArgumentException("文档内容为空，无法生成标准化文档");
         }
-        String systemPrompt = """
-                你是一个接口文档整理助手。请将用户提供的接口文档整理成标准化、结构清晰的格式。
-                要求：保留所有接口信息（路径、方法、参数、说明等），使用统一的 Markdown 或纯文本结构，
-                便于人类阅读和后续程序解析。只输出整理后的文档正文，不要输出 JSON，不要加多余解释。
-                """;
-        String userPrompt = "请将以下接口文档整理成标准化格式：\n\n" + raw;
-        String result = aiClientService.analyzeDocumentToApis(systemPrompt, userPrompt);
+        String userPrompt = String.format(AiPrompt.USER_DOCUMENT_STANDARDIZE, raw);
+        String result = aiClientService.analyzeDocumentToApis(AiPrompt.SYSTEM_DOCUMENT_STANDARDIZE, userPrompt);
         if (result != null && !result.isBlank()) {
             doc.setStandardizedContent(result.trim());
             doc.setStatus("standardized");
@@ -84,30 +80,8 @@ public class DocumentAnalyzeService {
             throw new IllegalArgumentException("文档内容为空，请先完成标准化或填写原始内容");
         }
 
-        // 构造提示词（系统 + 用户），要求模型输出标准 JSON
-        String systemPrompt = """
-                你是一个接口文档分析助手。请从提供的接口文档中识别所有 HTTP 接口，
-                按照固定 JSON 结构输出，不要输出多余解释或 Markdown，仅输出 JSON。
-
-                JSON 顶层结构示例：
-                {
-                  "apis": [
-                    {
-                      "apiName": "获取用户列表",
-                      "apiPath": "/api/user/list",
-                      "httpMethod": "GET",
-                      "description": "返回用户列表",
-                      "tags": ["user", "list"],
-                      "requestParams": { ... 任意嵌套 JSON ... },
-                      "responseSchema": { ... 任意嵌套 JSON ... }
-                    }
-                  ]
-                }
-                """;
-
-        String userPrompt = "请根据以下文档内容提取接口信息并按上述 JSON 结构返回：\n\n" + content;
-
-        String aiResult = aiClientService.analyzeDocumentToApis(systemPrompt, userPrompt);
+        String userPrompt = String.format(AiPrompt.USER_DOCUMENT_EXTRACT_APIS, content);
+        String aiResult = aiClientService.analyzeDocumentToApis(AiPrompt.SYSTEM_DOCUMENT_EXTRACT_APIS, userPrompt);
 
         // 简单清理 markdown 代码块标记
         String clean = cleanMarkdown(aiResult);
