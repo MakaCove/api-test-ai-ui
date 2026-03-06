@@ -30,7 +30,7 @@
         .link-btn:hover { text-decoration: underline; }
     </style>
 </head>
-<body th:data-api-id="${apiId}" th:data-project-id="${projectId}" th:attr="data-context-path=${contextPath}">
+<body th:data-api-id="${apiId}" th:data-project-id="${projectId}" th:data-case-gen-status="${apiCaseGenStatus}" th:attr="data-context-path=${contextPath}">
 <div class="app-layout">
     <th:block th:replace="~{layout :: sidebar(activeKey=${fromApis != null and fromApis ? 'apis' : 'projects'})}"></th:block>
     <main class="main-area">
@@ -50,7 +50,7 @@
             <div class="card-header">
                 <div style="font-size: 13px;color:#9ca3af;">为当前接口维护测试用例，后续可用于生成自动化测试代码。无用例时可点击「AI生成用例」。</div>
                 <div style="display:flex;gap:8px;align-items:center;">
-                    <button class="btn-primary" onclick="generateCasesForApi()">AI生成用例</button>
+                    <button id="btnGenerateCases" type="button" class="btn-primary" th:disabled="${apiCaseGenStatus == 'generating'}" th:text="${apiCaseGenStatus == 'generating' ? '生成中' : 'AI生成用例'}" onclick="generateCasesForApi()">AI生成用例</button>
                     <button class="btn-primary" onclick="toggleForm()">新建用例</button>
                 </div>
             </div>
@@ -80,7 +80,8 @@
                 </div>
             </div>
 
-            <table id="caseTable" class="data-table" style="display:none;">
+            <div class="table-scroll-wrap" id="caseTableWrap" style="display:none;">
+                <table id="caseTable" class="data-table table-ops-wide">
                 <thead>
                 <tr>
                     <th>ID</th>
@@ -88,12 +89,14 @@
                     <th>类型</th>
                     <th>优先级</th>
                     <th>状态</th>
+                    <th class="col-case-status">代码状态</th>
                     <th>创建时间</th>
                     <th>操作</th>
                 </tr>
                 </thead>
                 <tbody id="caseTbody"></tbody>
-            </table>
+                </table>
+            </div>
             <div class="empty" id="caseEmpty">暂无测试用例，可点击「AI生成用例」自动生成，或「新建用例」手工新增。</div>
             <div id="paginationWrap" class="pagination-wrap" style="display:none;"></div>
             </div>
@@ -131,6 +134,14 @@
         }, 3000);
     }
 
+    function setGenerateBtnState(disabled, text) {
+        const btn = document.getElementById('btnGenerateCases');
+        if (btn) {
+            btn.disabled = disabled;
+            btn.textContent = text || (disabled ? '生成中' : 'AI生成用例');
+        }
+    }
+
     async function generateCasesForApi() {
         const projectId = getProjectId();
         const apiId = getApiId();
@@ -138,6 +149,8 @@
             showBanner(false, '缺少项目或接口信息');
             return;
         }
+        const btn = document.getElementById('btnGenerateCases');
+        if (btn && btn.disabled) return;
         try {
             const resp = await fetch(`/api/projects/${projectId}/apis/${apiId}/generate-cases`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
             if (!resp.ok) {
@@ -146,7 +159,8 @@
                 return;
             }
             const data = await resp.json();
-            showBanner(true, '已生成 ' + (data.caseCount || 0) + ' 条测试用例');
+            showBanner(true, data.message || '已开始生成，请刷新列表查看进度');
+            setGenerateBtnState(true, '生成中');
             await loadTestCases(1);
         } catch (e) {
             showBanner(false, 'AI 生成用例异常，请查看控制台');
@@ -158,15 +172,19 @@
 
     function renderCasePagination(total, page, totalPages) {
         const wrap = document.getElementById('paginationWrap');
-        if (!wrap || totalPages <= 1) { if (wrap) wrap.style.display = 'none'; return; }
-        let html = '<span class="pagination-info">共 ' + total + ' 条，第 ' + page + ' / ' + totalPages + ' 页</span><nav class="pagination">';
-        if (page > 1) html += '<a href="javascript:void(0)" data-page="' + (page - 1) + '">上一页</a>';
-        for (let p = 1; p <= totalPages; p++) {
-            if (p === page) html += '<span class="page-current">' + p + '</span>';
-            else html += '<a href="javascript:void(0)" data-page="' + p + '">' + p + '</a>';
+        if (!wrap) return;
+        if (total === 0) { wrap.style.display = 'none'; return; }
+        let html = '<span class="pagination-info">共 ' + total + ' 条，第 ' + page + ' / ' + totalPages + ' 页</span>';
+        if (totalPages > 1) {
+            html += '<nav class="pagination">';
+            if (page > 1) html += '<a href="javascript:void(0)" data-page="' + (page - 1) + '">上一页</a>';
+            for (let p = 1; p <= totalPages; p++) {
+                if (p === page) html += '<span class="page-current">' + p + '</span>';
+                else html += '<a href="javascript:void(0)" data-page="' + p + '">' + p + '</a>';
+            }
+            if (page < totalPages) html += '<a href="javascript:void(0)" data-page="' + (page + 1) + '">下一页</a>';
+            html += '</nav>';
         }
-        if (page < totalPages) html += '<a href="javascript:void(0)" data-page="' + (page + 1) + '">下一页</a>';
-        html += '</nav>';
         wrap.innerHTML = html;
         wrap.style.display = 'flex';
         wrap.querySelectorAll('a[data-page]').forEach(a => { a.addEventListener('click', function() { caseCurrentPage = parseInt(this.getAttribute('data-page'), 10); loadTestCases(); }); });
@@ -187,31 +205,39 @@
             const total = data.total || 0;
             const totalPages = total === 0 ? 1 : Math.ceil(total / CASE_PAGE_SIZE);
             const tbody = document.getElementById('caseTbody');
-            const table = document.getElementById('caseTable');
+            const tableWrap = document.getElementById('caseTableWrap');
             const empty = document.getElementById('caseEmpty');
             const paginationWrap = document.getElementById('paginationWrap');
 
             tbody.innerHTML = '';
             if (records.length === 0) {
-                table.style.display = 'none';
+                if (tableWrap) tableWrap.style.display = 'none';
                 empty.style.display = 'block';
                 if (paginationWrap) paginationWrap.style.display = 'none';
                 return;
             }
 
+            const codeStatusText = { pending: '未生成', generating: '生成中', done: '已生成', failed: '失败' };
+            const getCodeStatusLabel = (s) => codeStatusText[s] || (s || '未生成');
             const ctx = getContextPath();
             records.forEach(c => {
                 const tr = document.createElement('tr');
                 const status = c.status || 'pending';
+                const codeGen = (c.codeGenStatus != null ? c.codeGenStatus : c.code_gen_status) || 'pending';
+                const canGenCode = codeGen !== 'generating';
+                const genCodeBtn = canGenCode
+                    ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;margin-right:4px;" onclick="generateCodeForCase(${c.id})">AI生成测试用例自动化代码</button>`
+                    : `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;margin-right:4px;" disabled>AI生成测试用例自动化代码</button>`;
                 tr.innerHTML = `
                     <td>${c.id}</td>
                     <td>${(c.caseName ?? '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</td>
                     <td><span class="tag">${(c.caseType ?? '').replace(/</g, '&lt;')}</span></td>
                     <td><span class="tag">P${c.priority ?? 3}</span></td>
                     <td><span class="tag">${String(status).replace(/</g, '&lt;')}</span></td>
+                    <td class="col-case-status"><span class="tag">${getCodeStatusLabel(codeGen)}</span></td>
                     <td>${formatDate(c.createdAt)}</td>
                     <td>
-                        <button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;margin-right:4px;" onclick="generateCodeForCase(${c.id})">AI生成测试用例自动化代码</button>
+                        ${genCodeBtn}
                         <a class="link-btn" href="${ctx}/testcases/${c.id}/code" style="margin-right:4px;">代码</a>
                         <button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;margin-right:4px;" onclick="editTestCase(${c.id})">编辑</button>
                         ${status === 'disabled' ? `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;margin-right:4px;background:rgba(34,197,94,0.7);" onclick="enableTestCase(${c.id})">启用</button>` : `<button type="button" class="btn-primary" style="padding:3px 8px;font-size:11px;margin-right:4px;background:rgba(239,68,68,0.6);" onclick="disableTestCase(${c.id})">禁用</button>`}
@@ -220,7 +246,7 @@
                 tbody.appendChild(tr);
             });
 
-            table.style.display = 'table';
+            if (tableWrap) tableWrap.style.display = 'block';
             empty.style.display = 'none';
             renderCasePagination(total, caseCurrentPage, totalPages);
         } catch (e) {
@@ -380,11 +406,15 @@
             if (!resp.ok) {
                 const err = await resp.json().catch(() => ({}));
                 showBanner(false, err.message || '生成测试代码失败');
+                await loadTestCases(caseCurrentPage);
                 return;
             }
-            showBanner(true, '已为该用例生成测试代码，可点击「代码」查看');
+            const data = await resp.json();
+            showBanner(true, data.message || '已开始生成，请刷新列表查看进度');
+            await loadTestCases(caseCurrentPage);
         } catch (e) {
             showBanner(false, '生成测试代码异常，请查看控制台');
+            await loadTestCases(caseCurrentPage);
         }
     }
 

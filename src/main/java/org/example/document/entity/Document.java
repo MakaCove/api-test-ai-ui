@@ -42,7 +42,8 @@ public class Document {
     private String standardizedContent;
 
     /**
-     * 状态：pending / analyzing / done / failed
+     * 文档状态（存英文，前端展示为中文）：
+     * pending=待处理，standardized=已标准化，extracting=AI提取中（点击提取后立即设置，禁止重复点击），done=接口提取完成，failed=失败
      */
     private String status;
 

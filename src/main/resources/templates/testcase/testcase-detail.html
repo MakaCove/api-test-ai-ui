@@ -26,15 +26,16 @@
                 <div class="detail-row"><span class="detail-label">请求数据</span><span class="detail-value"><pre th:text="${case.requestData}">-</pre></span></div>
                 <div class="detail-row"><span class="detail-label">预期响应</span><span class="detail-value"><pre th:text="${case.expectedResponse}">-</pre></span></div>
                 <div class="detail-row"><span class="detail-label">校验规则</span><span class="detail-value"><pre th:text="${case.validationRules}">-</pre></span></div>
-                <div class="detail-row"><span class="detail-label">优先级</span><span class="detail-value" th:text="${case.priority}">-</span></div>
-                <div class="detail-row"><span class="detail-label">状态</span><span class="detail-value" th:text="${case.status}">-</span></div>
+                <div class="detail-row"><span class="detail-label">优先级</span><span class="detail-value" th:text="${case.priority != null ? case.priority : 3}">-</span></div>
+                <div class="detail-row"><span class="detail-label">状态</span><span class="detail-value" th:text="${statusDisplay != null and case.status != null and statusDisplay[case.status] != null ? statusDisplay[case.status] : (case.status != null ? case.status : '启用')}">-</span></div>
+                <div class="detail-row"><span class="detail-label">代码状态</span><span class="detail-value" th:text="${codeGenStatusDisplay != null and case.codeGenStatus != null and codeGenStatusDisplay[case.codeGenStatus] != null ? codeGenStatusDisplay[case.codeGenStatus] : '未生成'}">-</span></div>
                 <div class="detail-row"><span class="detail-label">所属项目</span><span class="detail-value" th:text="${projectName}">-</span></div>
                 <div class="detail-row"><span class="detail-label">所属接口</span><span class="detail-value" th:text="${apiName}">-</span></div>
                 <div class="detail-row"><span class="detail-label">创建时间</span><span class="detail-value" th:text="${case.createdAt != null ? #temporals.format(case.createdAt, 'yyyy-MM-dd HH:mm:ss') : '—'}">-</span></div>
                 <div class="detail-row"><span class="detail-label">更新时间</span><span class="detail-value" th:text="${case.updatedAt != null ? #temporals.format(case.updatedAt, 'yyyy-MM-dd HH:mm:ss') : '—'}">-</span></div>
                 <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border-subtle);">
                     <a th:href="@{/testcases/{caseId}/code(caseId=${case.id})}" class="btn btn-secondary">代码</a>
-                    <button type="button" class="btn btn-primary" id="btnGenCode" style="margin-left:8px;">AI生成测试用例自动化代码</button>
+                    <button type="button" class="btn btn-primary" id="btnGenCode" style="margin-left:8px;" th:disabled="${case.codeGenStatus == 'generating'}" th:text="${case.codeGenStatus == 'generating' ? '生成中' : 'AI生成测试用例自动化代码'}">AI生成测试用例自动化代码</button>
                 </div>
             </div>
         </div>
@@ -52,21 +53,28 @@
         el.style.display = 'block';
         setTimeout(function() { el.style.display = 'none'; }, 3000);
     }
-    document.getElementById('btnGenCode').addEventListener('click', async function() {
-        const apiId = getApiId();
-        const caseId = getCaseId();
-        try {
-            const resp = await fetch('/api/apis/' + apiId + '/testcodes/generate-case/' + caseId, { method: 'POST' });
-            if (!resp.ok) {
-                const err = await resp.json().catch(function() { return {}; });
-                showBanner(false, err.message || '生成测试代码失败');
-                return;
+    var btnGenCode = document.getElementById('btnGenCode');
+    if (btnGenCode && !btnGenCode.disabled) {
+        btnGenCode.addEventListener('click', async function() {
+            if (this.disabled) return;
+            var apiId = getApiId();
+            var caseId = getCaseId();
+            try {
+                var resp = await fetch('/api/apis/' + apiId + '/testcodes/generate-case/' + caseId, { method: 'POST' });
+                if (!resp.ok) {
+                    var err = await resp.json().catch(function() { return {}; });
+                    showBanner(false, err.message || '生成测试代码失败');
+                    return;
+                }
+                var data = await resp.json();
+                showBanner(true, data.message || '已开始生成，请刷新页面查看');
+                this.disabled = true;
+                this.textContent = '生成中';
+            } catch (e) {
+                showBanner(false, '生成测试代码异常，请查看控制台');
             }
-            showBanner(true, '已为该用例生成测试代码，可点击「代码」查看');
-        } catch (e) {
-            showBanner(false, '生成测试代码异常，请查看控制台');
-        }
-    });
+        });
+    }
 </script>
 </body>
 </html>

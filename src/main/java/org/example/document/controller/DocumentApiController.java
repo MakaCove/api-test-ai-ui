@@ -22,10 +22,11 @@ import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * 项目下文档 REST API：分页列表、粘贴保存、文件上传、重命名、删除、AI 分析提取接口。
- * 粘贴/上传保存后会自动触发 AI 生成标准化内容；分析接口将标准化内容解析为接口列表写入 t_api_info。
+ * 粘贴/上传：先落库（status=pending），再异步触发 AI 标准化；接口立即返回，前端刷新列表后可见「待处理」，AI 完成后变为「已标准化」或「失败」。
  */
 @Slf4j
 @RestController
@@ -52,7 +53,7 @@ public class DocumentApiController {
         return result;
     }
 
-    /** 粘贴文本保存文档，保存后自动调用 AI 生成标准化内容 */
+    /** 粘贴文本保存文档：先落库（待处理），再异步 AI 标准化；接口立即返回，前端刷新列表即可。 */
     @PostMapping("/text")
     public Document createFromText(@PathVariable("projectId") Long projectId,
                                    @RequestBody CreateTextDocumentRequest request) {
@@ -68,19 +69,18 @@ public class DocumentApiController {
         doc.setCreatedAt(now);
         doc.setUpdatedAt(now);
         documentMapper.insert(doc);
-        try {
-            documentAnalyzeService.generateStandardizedContent(projectId, doc.getId());
-        } catch (Exception e) {
-            log.warn("保存后自动生成标准化文档失败: {}", e.getMessage());
-            doc.setStatus("failed");
-            doc.setErrorMessage(e.getMessage() != null ? e.getMessage() : "生成标准化文档失败");
-            doc.setUpdatedAt(LocalDateTime.now());
-            documentMapper.updateById(doc);
-        }
-        return documentMapper.selectById(doc.getId());
+        final Long docId = doc.getId();
+        CompletableFuture.runAsync(() -> {
+            try {
+                documentAnalyzeService.generateStandardizedContent(projectId, docId);
+            } catch (Exception e) {
+                log.warn("异步标准化文档失败 documentId={}: {}", docId, e.getMessage());
+            }
+        });
+        return documentMapper.selectById(docId);
     }
 
-    /** 上传文件创建文档，支持 .txt .doc .docx .md；保存后自动调用 AI 生成标准化内容 */
+    /** 上传文件创建文档：先落库（待处理），再异步 AI 标准化；接口立即返回，前端刷新列表即可。支持 .txt .doc .docx .md */
     @PostMapping("/upload")
     public Document createFromFile(@PathVariable("projectId") Long projectId,
                                    @RequestParam("file") MultipartFile file,
@@ -107,16 +107,15 @@ public class DocumentApiController {
         doc.setCreatedAt(now);
         doc.setUpdatedAt(now);
         documentMapper.insert(doc);
-        try {
-            documentAnalyzeService.generateStandardizedContent(projectId, doc.getId());
-        } catch (Exception e) {
-            log.warn("上传后自动生成标准化文档失败: {}", e.getMessage());
-            doc.setStatus("failed");
-            doc.setErrorMessage(e.getMessage() != null ? e.getMessage() : "生成标准化文档失败");
-            doc.setUpdatedAt(LocalDateTime.now());
-            documentMapper.updateById(doc);
-        }
-        return documentMapper.selectById(doc.getId());
+        final Long docId = doc.getId();
+        CompletableFuture.runAsync(() -> {
+            try {
+                documentAnalyzeService.generateStandardizedContent(projectId, docId);
+            } catch (Exception e) {
+                log.warn("异步标准化文档失败 documentId={}: {}", docId, e.getMessage());
+            }
+        });
+        return documentMapper.selectById(docId);
     }
 
     private static String inferDocumentType(String filename) {
@@ -157,12 +156,28 @@ public class DocumentApiController {
         }
     }
 
+    /** 点击「AI提取接口信息」：先置状态为 extracting 并立即返回，后台异步执行提取；前端刷新列表即可看到「AI提取中」且按钮置灰。 */
     @PostMapping("/{documentId}/analyze")
     public Map<String, Object> analyze(@PathVariable("projectId") Long projectId,
                                        @PathVariable("documentId") Long documentId) {
-        List<ApiInfo> apis = documentAnalyzeService.analyzeAndGenerateApis(projectId, documentId);
+        Document doc = documentMapper.selectById(documentId);
+        if (doc == null || !projectId.equals(doc.getProjectId())) {
+            throw new IllegalArgumentException("文档不存在或不属于当前项目");
+        }
+        if ("extracting".equals(doc.getStatus())) {
+            throw new IllegalArgumentException("正在提取中，请勿重复点击");
+        }
+        documentAnalyzeService.setExtracting(projectId, documentId);
+        CompletableFuture.runAsync(() -> {
+            try {
+                documentAnalyzeService.analyzeAndGenerateApis(projectId, documentId);
+            } catch (Exception e) {
+                log.warn("后台提取接口信息失败 documentId={}: {}", documentId, e.getMessage());
+            }
+        });
         Map<String, Object> result = new HashMap<>();
-        result.put("apiCount", apis.size());
+        result.put("status", "extracting");
+        result.put("message", "已开始提取，请刷新列表查看进度");
         return result;
     }
 

@@ -68,13 +68,13 @@
                 <div class="meta">
                     基于当前接口及其测试用例，生成 JUnit 5 风格的 Java 测试代码。
                 </div>
-                <button class="btn-primary" onclick="generateCode()">生成测试代码</button>
+                <button class="btn-primary" onclick="generateCode()">AI生成测试用例自动化代码</button>
             </div>
 
             <div id="banner" class="banner"></div>
 
             <div id="codeList"></div>
-            <div class="empty" id="codeEmpty">暂无测试代码，点击右上角「生成测试代码」开始。</div>
+            <div class="empty" id="codeEmpty">暂无测试代码，点击右上角「AI生成测试用例自动化代码」开始。</div>
             <div id="paginationWrap" class="pagination-wrap" style="display:none;"></div>
             </div>
         </div>
@@ -86,15 +86,19 @@
 
     function renderCodePagination(total, page, totalPages) {
         const wrap = document.getElementById('paginationWrap');
-        if (!wrap || totalPages <= 1) { if (wrap) wrap.style.display = 'none'; return; }
-        let html = '<span class="pagination-info">共 ' + total + ' 条，第 ' + page + ' / ' + totalPages + ' 页</span><nav class="pagination">';
-        if (page > 1) html += '<a href="javascript:void(0)" data-page="' + (page - 1) + '">上一页</a>';
-        for (let p = 1; p <= totalPages; p++) {
-            if (p === page) html += '<span class="page-current">' + p + '</span>';
-            else html += '<a href="javascript:void(0)" data-page="' + p + '">' + p + '</a>';
+        if (!wrap) return;
+        if (total === 0) { wrap.style.display = 'none'; return; }
+        let html = '<span class="pagination-info">共 ' + total + ' 条，第 ' + page + ' / ' + totalPages + ' 页</span>';
+        if (totalPages > 1) {
+            html += '<nav class="pagination">';
+            if (page > 1) html += '<a href="javascript:void(0)" data-page="' + (page - 1) + '">上一页</a>';
+            for (let p = 1; p <= totalPages; p++) {
+                if (p === page) html += '<span class="page-current">' + p + '</span>';
+                else html += '<a href="javascript:void(0)" data-page="' + p + '">' + p + '</a>';
+            }
+            if (page < totalPages) html += '<a href="javascript:void(0)" data-page="' + (page + 1) + '">下一页</a>';
+            html += '</nav>';
         }
-        if (page < totalPages) html += '<a href="javascript:void(0)" data-page="' + (page + 1) + '">下一页</a>';
-        html += '</nav>';
         wrap.innerHTML = html;
         wrap.style.display = 'flex';
         wrap.querySelectorAll('a[data-page]').forEach(a => { a.addEventListener('click', function() { codeCurrentPage = parseInt(this.getAttribute('data-page'), 10); loadCodes(); }); });

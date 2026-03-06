@@ -19,24 +19,59 @@
                 <p class="page-desc">最近添加的接口，点击「详情」进入该接口的测试用例列表；若无用例可在用例页点击「AI生成用例」。</p>
             </div>
             <div class="card">
-                <table th:if="${recentApis != null and !recentApis.isEmpty()}" class="data-table">
-                    <thead>
-                        <tr><th>接口名称</th><th>方法</th><th>路径</th><th>所属项目</th><th>操作</th></tr>
-                    </thead>
-                    <tbody>
-                        <tr th:each="api : ${recentApis}">
-                            <td th:text="${api.apiName}">-</td>
-                            <td><span class="tag" th:text="${api.httpMethod}">GET</span></td>
-                            <td th:text="${api.apiPath}" style="max-width: 200px; overflow: hidden; text-overflow: ellipsis;">-</td>
-                            <td th:text="${(projectIdToName != null and projectIdToName[api.projectId] != null) ? projectIdToName[api.projectId] : '—'}">—</td>
-                            <td><a th:href="@{/projects/{pid}/apis/{apiId}/testcases(pid=${api.projectId}, apiId=${api.id}, from='apis')}" class="link-btn">详情</a></td>
-                        </tr>
-                    </tbody>
-                </table>
+                <div id="banner" class="banner"></div>
+                <div th:if="${recentApis != null and !recentApis.isEmpty()}" class="table-scroll-wrap">
+                    <table class="data-table table-ops-wide">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th class="col-name">名称</th>
+                                <th>方法</th>
+                                <th>路径</th>
+                                <th class="col-doc">所属文档</th>
+                                <th>所属项目</th>
+                                <th class="col-status">状态</th>
+                                <th class="col-case-status">用例状态</th>
+                                <th class="col-created">创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="api : ${recentApis}">
+                                <td th:text="${api.id}">-</td>
+                                <td class="col-name" th:text="${api.apiName}">-</td>
+                                <td><span class="tag" th:text="${api.httpMethod}">GET</span></td>
+                                <td th:text="${api.apiPath}">-</td>
+                                <td class="col-doc" th:text="${(documentIdToName != null and api.documentId != null and documentIdToName.containsKey(api.documentId)) ? documentIdToName.get(api.documentId) : '—'}">—</td>
+                                <td th:text="${(projectIdToName != null and projectIdToName[api.projectId] != null) ? projectIdToName[api.projectId] : '—'}">—</td>
+                                <td class="col-status"><span class="tag" th:text="${api.status == 'active' ? '启用' : (api.status == 'disabled' ? '禁用' : '启用')}">启用</span></td>
+                                <td class="col-case-status"><span class="tag" th:text="${caseGenStatusDisplay != null and api.caseGenStatus != null and caseGenStatusDisplay[api.caseGenStatus] != null ? caseGenStatusDisplay[api.caseGenStatus] : '未生成'}">未生成</span></td>
+                                <td class="col-created" th:text="${api.createdAt != null ? #temporals.format(api.createdAt, 'yyyy-MM-dd HH:mm:ss') : ''}">-</td>
+                                <td>
+                                    <th:block th:if="${api.caseGenStatus != 'generating'}">
+                                        <button type="button" class="btn btn-primary" style="padding:4px 10px;font-size:12px;" th:attr="data-pid=${api.projectId},data-aid=${api.id}" onclick="generateCases(this)">AI生成用例</button>
+                                    </th:block>
+                                    <th:block th:if="${api.caseGenStatus == 'generating'}">
+                                        <button type="button" class="btn btn-primary" style="padding:4px 10px;font-size:12px;" disabled>AI生成用例</button>
+                                    </th:block>
+                                    <a th:href="@{/projects/{pid}/apis/{apiId}/testcases(pid=${api.projectId}, apiId=${api.id}, from='apis')}" class="link-btn">用例列表</a>
+                                    <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:12px;" th:attr="data-pid=${api.projectId},data-aid=${api.id}" onclick="editApi(this)">修改</button>
+                                    <th:block th:if="${api.status == 'disabled'}">
+                                        <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:12px;color:#86efac;" th:attr="data-pid=${api.projectId},data-aid=${api.id}" onclick="enableApi(this)">启用</button>
+                                    </th:block>
+                                    <th:block th:if="${api.status != 'disabled'}">
+                                        <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:12px;" th:attr="data-pid=${api.projectId},data-aid=${api.id}" onclick="disableApi(this)">禁用</button>
+                                    </th:block>
+                                    <button type="button" class="btn btn-danger" style="padding:4px 10px;font-size:12px;" th:attr="data-pid=${api.projectId},data-aid=${api.id}" onclick="deleteApi(this)">删除</button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
                 <div th:if="${recentApis == null || recentApis.isEmpty()}" class="empty-state">暂无接口，请先在项目中通过文档分析或手工添加接口。</div>
-                <div th:if="${recentApis != null and !recentApis.isEmpty() and totalPages > 1}" class="pagination-wrap">
+                <div th:if="${recentApis != null and !recentApis.isEmpty()}" class="pagination-wrap">
                     <span class="pagination-info">共 <span th:text="${totalApis}">0</span> 条，第 <span th:text="${currentPage}">1</span> / <span th:text="${totalPages}">1</span> 页</span>
-                    <nav class="pagination">
+                    <nav th:if="${totalPages > 1}" class="pagination">
                         <a th:if="${currentPage > 1}" th:href="@{/apis(page=${currentPage - 1})}" rel="prev">上一页</a>
                         <th:block th:each="p : ${#numbers.sequence(1, totalPages)}">
                             <a th:if="${p != currentPage}" th:href="@{/apis(page=${p})}" th:text="${p}">1</a>
@@ -49,5 +84,157 @@
         </div>
     </main>
 </div>
+
+<!-- 修改接口弹窗 -->
+<div id="editModal" class="modal-overlay" onclick="if(event.target===this) closeEditModal()">
+    <div class="modal-box" onclick="event.stopPropagation()">
+        <div class="modal-title">修改接口</div>
+        <div class="modal-body">
+            <div class="form-row">
+                <div style="flex:2;"><label>接口名称</label><input id="modalApiName" placeholder="接口名称"></div>
+                <div style="flex:2;"><label>接口路径</label><input id="modalApiPath" placeholder="/api/xxx"></div>
+                <div style="flex:1;"><label>HTTP 方法</label><select id="modalHttpMethod"><option value="GET">GET</option><option value="POST">POST</option><option value="PUT">PUT</option><option value="DELETE">DELETE</option></select></div>
+            </div>
+            <div><label>标签（逗号分隔）</label><input id="modalApiTags" placeholder="可选"></div>
+            <div><label>接口描述</label><textarea id="modalApiDescription" placeholder="可选" rows="2"></textarea></div>
+            <div><label>请求参数（JSON，入参结构）</label><textarea id="modalRequestParams" placeholder='如 {"userId":{"type":"Long","required":true}}' rows="4"></textarea></div>
+            <div><label>响应结构（JSON）</label><textarea id="modalResponseSchema" placeholder='如 {"code":{"type":"Integer"},"data":{}}' rows="4"></textarea></div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-cancel" onclick="closeEditModal()">取消</button>
+            <button type="button" class="btn btn-primary" onclick="submitEditModal()">保存</button>
+        </div>
+    </div>
+</div>
+
+<script th:inline="javascript">
+    let editingProjectId = null;
+    let editingApiId = null;
+
+    function showBanner(ok, msg) {
+        const el = document.getElementById('banner');
+        if (!el) return;
+        el.classList.remove('ok', 'err');
+        el.classList.add(ok ? 'ok' : 'err');
+        el.textContent = msg;
+        el.style.display = 'block';
+        setTimeout(function() { el.style.display = 'none'; }, 2500);
+    }
+
+    function getPidAid(btn) {
+        const pid = btn && btn.getAttribute ? btn.getAttribute('data-pid') : null;
+        const aid = btn && btn.getAttribute ? btn.getAttribute('data-aid') : null;
+        return { projectId: pid, apiId: aid };
+    }
+
+    function generateCases(btn) {
+        const { projectId, apiId } = getPidAid(btn);
+        if (!projectId || !apiId) return;
+        (async function() {
+            try {
+                const resp = await fetch('/api/projects/' + projectId + '/apis/' + apiId + '/generate-cases', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+                if (!resp.ok) {
+                    const err = await resp.json().catch(function() { return {}; });
+                    showBanner(false, err.message || 'AI 生成用例失败');
+                    return;
+                }
+                const data = await resp.json();
+                showBanner(true, data.message || '已开始生成，请刷新列表查看进度');
+                setTimeout(function() { window.location.reload(); }, 1500);
+            } catch (e) {
+                showBanner(false, 'AI 生成用例异常');
+            }
+        })();
+    }
+
+    function editApi(btn) {
+        const { projectId, apiId } = getPidAid(btn);
+        if (!projectId || !apiId) return;
+        editingProjectId = projectId;
+        editingApiId = apiId;
+        fetch('/api/projects/' + projectId + '/apis/' + apiId)
+            .then(function(r) { return r.ok ? r.json() : Promise.reject(new Error('加载失败')); })
+            .then(function(a) {
+                document.getElementById('modalApiName').value = a.apiName || '';
+                document.getElementById('modalApiPath').value = a.apiPath || '';
+                document.getElementById('modalHttpMethod').value = a.httpMethod || 'GET';
+                document.getElementById('modalApiDescription').value = a.description || '';
+                document.getElementById('modalApiTags').value = a.tags || '';
+                document.getElementById('modalRequestParams').value = a.requestParams || '';
+                document.getElementById('modalResponseSchema').value = a.responseSchema || '';
+                document.getElementById('editModal').classList.add('show');
+            })
+            .catch(function() { showBanner(false, '加载接口详情失败'); });
+    }
+
+    function closeEditModal() {
+        document.getElementById('editModal').classList.remove('show');
+        editingProjectId = null;
+        editingApiId = null;
+    }
+
+    function submitEditModal() {
+        if (!editingProjectId || !editingApiId) return;
+        var apiName = document.getElementById('modalApiName').value.trim();
+        var apiPath = document.getElementById('modalApiPath').value.trim();
+        if (!apiName || !apiPath) { showBanner(false, '接口名称和路径不能为空'); return; }
+        var body = {
+            apiName: apiName,
+            apiPath: apiPath,
+            httpMethod: document.getElementById('modalHttpMethod').value,
+            description: document.getElementById('modalApiDescription').value.trim() || null,
+            tags: document.getElementById('modalApiTags').value.trim() || null,
+            requestParams: document.getElementById('modalRequestParams').value.trim() || null,
+            responseSchema: document.getElementById('modalResponseSchema').value.trim() || null
+        };
+        fetch('/api/projects/' + editingProjectId + '/apis/' + editingApiId, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        }).then(function(r) {
+            if (!r.ok) { showBanner(false, '更新接口失败'); return; }
+            closeEditModal();
+            showBanner(true, '接口已更新');
+            setTimeout(function() { window.location.reload(); }, 800);
+        }).catch(function() { showBanner(false, '更新接口异常'); });
+    }
+
+    function disableApi(btn) {
+        const { projectId, apiId } = getPidAid(btn);
+        if (!projectId || !apiId) return;
+        fetch('/api/projects/' + projectId + '/apis/' + apiId, { method: 'DELETE' })
+            .then(function(r) {
+                if (!r.ok) { showBanner(false, '禁用接口失败'); return; }
+                showBanner(true, '接口已禁用');
+                setTimeout(function() { window.location.reload(); }, 800);
+            })
+            .catch(function() { showBanner(false, '禁用接口异常'); });
+    }
+
+    function enableApi(btn) {
+        const { projectId, apiId } = getPidAid(btn);
+        if (!projectId || !apiId) return;
+        fetch('/api/projects/' + projectId + '/apis/' + apiId + '/enable', { method: 'PATCH' })
+            .then(function(r) {
+                if (!r.ok) { showBanner(false, '启用接口失败'); return; }
+                showBanner(true, '接口已启用');
+                setTimeout(function() { window.location.reload(); }, 800);
+            })
+            .catch(function() { showBanner(false, '启用接口异常'); });
+    }
+
+    function deleteApi(btn) {
+        if (!confirm('确定要删除该接口吗？')) return;
+        const { projectId, apiId } = getPidAid(btn);
+        if (!projectId || !apiId) return;
+        fetch('/api/projects/' + projectId + '/apis/' + apiId, { method: 'DELETE' })
+            .then(function(r) {
+                if (!r.ok) { showBanner(false, '删除接口失败'); return; }
+                showBanner(true, '接口已删除');
+                setTimeout(function() { window.location.reload(); }, 800);
+            })
+            .catch(function() { showBanner(false, '删除接口异常'); });
+    }
+</script>
 </body>
 </html>

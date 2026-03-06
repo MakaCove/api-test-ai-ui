@@ -13,13 +13,18 @@ import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import org.example.testcase.entity.TestCase;
+import org.example.testcase.mapper.TestCaseMapper;
+
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 
 /**
  * 接口下测试代码 REST API：分页列表、整接口批量生成、单用例生成、保存到工程、下载。
@@ -33,6 +38,7 @@ public class TestCodeApiController {
     private final TestCodeMapper testCodeMapper;
     private final TestCodeGenerateService testCodeGenerateService;
     private final SettingsService settingsService;
+    private final TestCaseMapper testCaseMapper;
 
     @GetMapping
     public Map<String, Object> list(@PathVariable("apiId") Long apiId,
@@ -62,12 +68,40 @@ public class TestCodeApiController {
         return result;
     }
 
-    /** 为单条用例生成一条测试代码（先软删该用例原有代码再插入） */
+    /** 为单条用例生成一条测试代码（先软删该用例原有代码再插入）。先置为生成中防重复点击，异步执行后置为已生成/失败。 */
     @PostMapping("/generate-case/{testCaseId}")
-    public TestCode generateForCase(@PathVariable("apiId") Long apiId,
-                                    @PathVariable("testCaseId") Long testCaseId) {
+    public Map<String, Object> generateForCase(@PathVariable("apiId") Long apiId,
+                                               @PathVariable("testCaseId") Long testCaseId) {
         log.info("为单用例生成测试代码 apiId={} testCaseId={}", apiId, testCaseId);
-        return testCodeGenerateService.generateForTestCase(apiId, testCaseId);
+        TestCase tc = testCaseMapper.selectById(testCaseId);
+        if (tc == null || !apiId.equals(tc.getApiId()) || tc.getDeletedAt() != null) {
+            throw new IllegalArgumentException("测试用例不存在或不属于当前接口");
+        }
+        if ("generating".equals(tc.getCodeGenStatus())) {
+            throw new IllegalArgumentException("正在生成中，请勿重复点击");
+        }
+        tc.setCodeGenStatus("generating");
+        tc.setUpdatedAt(LocalDateTime.now());
+        testCaseMapper.updateById(tc);
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                testCodeGenerateService.generateForTestCase(apiId, testCaseId);
+            } catch (Exception e) {
+                log.warn("为用例生成测试代码失败 testCaseId={}: {}", testCaseId, e.getMessage());
+                TestCase failed = testCaseMapper.selectById(testCaseId);
+                if (failed != null) {
+                    failed.setCodeGenStatus("failed");
+                    failed.setUpdatedAt(LocalDateTime.now());
+                    testCaseMapper.updateById(failed);
+                }
+            }
+        });
+
+        Map<String, Object> result = new HashMap<>();
+        result.put("status", "generating");
+        result.put("message", "已开始生成，请刷新列表查看进度");
+        return result;
     }
 
     @PostMapping("/{id}/save")

@@ -22,53 +22,80 @@
             <div class="card">
                 <div class="card-header">
                     <div class="card-desc" style="flex:1;margin:0;">新建接口或从文档中提取后在此编辑；每个接口可生成用例与自动化代码。</div>
-                    <button class="btn btn-primary" onclick="toggleForm()">新建接口</button>
+                    <button class="btn btn-primary" onclick="openCreateApiModal()">新建接口</button>
                 </div>
                 <div id="banner" class="banner"></div>
-                <div id="formBlock" class="form-block">
-                    <div class="form-row">
-                        <input id="apiName" placeholder="接口名称" style="flex:2;min-width:140px;">
-                        <input id="apiPath" placeholder="接口路径，如 /api/user/list" style="flex:2;min-width:180px;">
-                        <select id="httpMethod" style="flex:1;min-width:100px;">
-                            <option value="GET">GET</option>
-                            <option value="POST">POST</option>
-                            <option value="PUT">PUT</option>
-                            <option value="DELETE">DELETE</option>
-                        </select>
-                    </div>
-                    <input id="apiTags" placeholder="标签，逗号分隔（可选）">
-                    <textarea id="apiDescription" placeholder="接口描述（可选）"></textarea>
-                    <div class="form-group">
-                        <label>请求参数（JSON，入参结构）</label>
-                        <textarea id="apiRequestParams" placeholder='如 {"userId":{"type":"Long","required":true}}' style="min-height:100px;"></textarea>
-                    </div>
-                    <div class="form-group">
-                        <label>响应结构（JSON）</label>
-                        <textarea id="apiResponseSchema" placeholder='如 {"code":{"type":"Integer"},"data":{"type":"Object"}}' style="min-height:100px;"></textarea>
-                    </div>
-                    <div class="form-row" style="justify-content:flex-end;">
-                        <button type="button" class="btn btn-primary" onclick="submitApi()">保存接口</button>
-                    </div>
-                </div>
-                <table id="apiTable" class="data-table" style="display:none;">
+                <div class="table-scroll-wrap" id="apiTableWrap" style="display:none;">
+                    <table id="apiTable" class="data-table table-ops-wide">
                     <thead>
                     <tr>
                         <th>ID</th>
-                        <th>名称</th>
+                        <th class="col-name">名称</th>
                         <th>方法</th>
                         <th>路径</th>
-                        <th>状态</th>
-                        <th>创建时间</th>
+                        <th class="col-doc">所属文档</th>
+                        <th class="col-status">状态</th>
+                        <th class="col-case-status">用例状态</th>
+                        <th class="col-created">创建时间</th>
                         <th>操作</th>
                     </tr>
                     </thead>
                     <tbody id="apiTbody"></tbody>
-                </table>
+                    </table>
+                </div>
                 <div class="empty-state" id="apiEmpty">暂无接口，点击「新建接口」或从文档管理中提取接口。</div>
                 <div id="paginationWrap" class="pagination-wrap" style="display:none;"></div>
             </div>
         </div>
     </main>
+</div>
+
+<!-- 新建接口弹窗 -->
+<div id="createApiModal" class="modal-overlay" onclick="if(event.target===this) closeCreateApiModal()">
+    <div class="modal-box" onclick="event.stopPropagation()">
+        <div class="modal-title">新建接口</div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label for="apiName">接口名称</label>
+                <input id="apiName" placeholder="接口名称">
+            </div>
+            <div class="form-row">
+                <div class="form-group" style="flex:2;">
+                    <label for="apiPath">接口路径</label>
+                    <input id="apiPath" placeholder="如 /api/user/list">
+                </div>
+                <div class="form-group" style="flex:1;">
+                    <label for="httpMethod">HTTP 方法</label>
+                    <select id="httpMethod">
+                        <option value="GET">GET</option>
+                        <option value="POST">POST</option>
+                        <option value="PUT">PUT</option>
+                        <option value="DELETE">DELETE</option>
+                    </select>
+                </div>
+            </div>
+            <div class="form-group">
+                <label for="apiTags">标签（逗号分隔，可选）</label>
+                <input id="apiTags" placeholder="可选">
+            </div>
+            <div class="form-group">
+                <label for="apiDescription">接口描述（可选）</label>
+                <textarea id="apiDescription" placeholder="可选" rows="2"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="apiRequestParams">请求参数（JSON，入参结构）</label>
+                <textarea id="apiRequestParams" placeholder='如 {"userId":{"type":"Long","required":true}}' rows="4"></textarea>
+            </div>
+            <div class="form-group">
+                <label for="apiResponseSchema">响应结构（JSON）</label>
+                <textarea id="apiResponseSchema" placeholder='如 {"code":{"type":"Integer"},"data":{"type":"Object"}}' rows="4"></textarea>
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-cancel" onclick="closeCreateApiModal()">取消</button>
+            <button type="button" class="btn btn-primary" onclick="submitApi()">保存接口</button>
+        </div>
+    </div>
 </div>
 
 <!-- 修改接口弹窗 -->
@@ -110,15 +137,19 @@
 
     function renderApiPagination(total, page, totalPages) {
         const wrap = document.getElementById('paginationWrap');
-        if (!wrap || totalPages <= 1) { if (wrap) wrap.style.display = 'none'; return; }
-        let html = '<span class="pagination-info">共 ' + total + ' 条，第 ' + page + ' / ' + totalPages + ' 页</span><nav class="pagination">';
-        if (page > 1) html += '<a href="javascript:void(0)" data-page="' + (page - 1) + '">上一页</a>';
-        for (let p = 1; p <= totalPages; p++) {
-            if (p === page) html += '<span class="page-current">' + p + '</span>';
-            else html += '<a href="javascript:void(0)" data-page="' + p + '">' + p + '</a>';
+        if (!wrap) return;
+        if (total === 0) { wrap.style.display = 'none'; return; }
+        let html = '<span class="pagination-info">共 ' + total + ' 条，第 ' + page + ' / ' + totalPages + ' 页</span>';
+        if (totalPages > 1) {
+            html += '<nav class="pagination">';
+            if (page > 1) html += '<a href="javascript:void(0)" data-page="' + (page - 1) + '">上一页</a>';
+            for (let p = 1; p <= totalPages; p++) {
+                if (p === page) html += '<span class="page-current">' + p + '</span>';
+                else html += '<a href="javascript:void(0)" data-page="' + p + '">' + p + '</a>';
+            }
+            if (page < totalPages) html += '<a href="javascript:void(0)" data-page="' + (page + 1) + '">下一页</a>';
+            html += '</nav>';
         }
-        if (page < totalPages) html += '<a href="javascript:void(0)" data-page="' + (page + 1) + '">下一页</a>';
-        html += '</nav>';
         wrap.innerHTML = html;
         wrap.style.display = 'flex';
         wrap.querySelectorAll('a[data-page]').forEach(a => { a.addEventListener('click', function() { apiCurrentPage = parseInt(this.getAttribute('data-page'), 10); loadApis(); }); });
@@ -136,28 +167,47 @@
             const total = data.total || 0;
             const totalPages = total === 0 ? 1 : Math.ceil(total / API_PAGE_SIZE);
             const countMap = data.testCaseCountByApiId || {};
+            const docTitleMap = data.documentIdToTitle || {};
+            function getDocTitle(docId) {
+                if (docId == null) return '—';
+                const t = docTitleMap[docId] || docTitleMap[String(docId)];
+                return (t != null && t !== '') ? t : '—';
+            }
             const tbody = document.getElementById('apiTbody');
-            const table = document.getElementById('apiTable');
+            const tableWrap = document.getElementById('apiTableWrap');
             const empty = document.getElementById('apiEmpty');
             const paginationWrap = document.getElementById('paginationWrap');
             tbody.innerHTML = '';
-            if (records.length === 0) { table.style.display = 'none'; empty.style.display = 'block'; if (paginationWrap) paginationWrap.style.display = 'none'; return; }
+            if (records.length === 0) { if (tableWrap) tableWrap.style.display = 'none'; empty.style.display = 'block'; if (paginationWrap) paginationWrap.style.display = 'none'; return; }
+            const caseStatusText = { pending: '未生成', generating: '生成中', done: '已生成', failed: '失败' };
+            const apiStatusText = { active: '启用', disabled: '禁用' };
+            function getCaseStatusLabel(s) { return caseStatusText[s] || (s ? s : '未生成'); }
+            function getApiStatusLabel(s) { return apiStatusText[s] || (s ? s : '启用'); }
             records.forEach(a => {
                 const tr = document.createElement('tr');
                 const status = a.status || 'active';
+                const statusLabel = getApiStatusLabel(status);
+                const caseGenStatus = (a.caseGenStatus != null ? a.caseGenStatus : a.case_gen_status) || 'pending';
+                const canGenerate = (caseGenStatus !== 'generating');
                 const pid = getProjectId();
                 const disableOrEnable = status === 'disabled'
                     ? `<button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:12px;color:#86efac;" onclick="enableApi(${a.id})">启用</button>`
                     : `<button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="disableApi(${a.id})">禁用</button>`;
+                const genBtn = canGenerate
+                    ? `<button type="button" class="btn btn-primary" style="padding:4px 10px;font-size:12px;" onclick="generateCases(${a.id})">AI生成用例</button>`
+                    : `<button type="button" class="btn btn-primary" style="padding:4px 10px;font-size:12px;" disabled>AI生成用例</button>`;
+                const createdAt = a.createdAt ? (typeof a.createdAt === 'string' ? a.createdAt.replace('T', ' ').substring(0, 19) : a.createdAt) : '';
                 tr.innerHTML = `
                     <td>${a.id}</td>
-                    <td>${a.apiName ?? ''}</td>
+                    <td class="col-name">${a.apiName ?? ''}</td>
                     <td><span class="tag">${a.httpMethod ?? ''}</span></td>
                     <td>${a.apiPath ?? ''}</td>
-                    <td><span class="tag">${status}</span></td>
-                    <td>${a.createdAt ? (typeof a.createdAt === 'string' ? a.createdAt.replace('T', ' ').substring(0, 19) : a.createdAt) : ''}</td>
+                    <td class="col-doc">${getDocTitle(a.documentId)}</td>
+                    <td class="col-status"><span class="tag">${statusLabel}</span></td>
+                    <td class="col-case-status"><span class="tag">${getCaseStatusLabel(caseGenStatus)}</span></td>
+                    <td class="col-created">${createdAt}</td>
                     <td>
-                        <button type="button" class="btn btn-primary" style="padding:4px 10px;font-size:12px;" onclick="generateCases(${a.id})">AI生成用例</button>
+                        ${genBtn}
                         <a class="link-btn" href="/projects/${pid}/apis/${a.id}/testcases">用例列表</a>
                         <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="editApi(${a.id})">修改</button>
                         ${disableOrEnable}
@@ -166,7 +216,7 @@
                 `;
                 tbody.appendChild(tr);
             });
-            table.style.display = 'table';
+            if (tableWrap) tableWrap.style.display = 'block';
             empty.style.display = 'none';
             renderApiPagination(total, apiCurrentPage, totalPages);
         } catch (e) { console.error('加载接口异常', e); }
@@ -176,11 +226,11 @@
         if (!projectId) return;
         try {
             const resp = await fetch(`/api/projects/${projectId}/apis/${apiId}/generate-cases`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-            if (!resp.ok) { const err = await resp.json().catch(() => ({})); showBanner(false, err.message || 'AI 生成用例失败'); return; }
+            if (!resp.ok) { const err = await resp.json().catch(() => ({})); showBanner(false, err.message || 'AI 生成用例失败'); await loadApis(apiCurrentPage); return; }
             const data = await resp.json();
-            showBanner(true, '已生成 ' + (data.caseCount || 0) + ' 条测试用例');
-            await loadApis();
-        } catch (e) { showBanner(false, 'AI 生成用例异常'); }
+            showBanner(true, data.message || '已开始生成，请刷新列表查看进度');
+            await loadApis(apiCurrentPage);
+        } catch (e) { showBanner(false, 'AI 生成用例异常'); await loadApis(apiCurrentPage); }
     }
     async function enableApi(id) {
         const projectId = getProjectId();
@@ -220,7 +270,7 @@
             const resp = await fetch(`/api/projects/${projectId}/apis`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
             if (!resp.ok) { showBanner(false, '创建接口失败'); return; }
             clearApiForm();
-            document.getElementById('formBlock').classList.remove('show');
+            closeCreateApiModal();
             await loadApis(1);
             showBanner(true, '创建接口成功');
         } catch (e) { showBanner(false, '提交接口异常'); }
@@ -288,8 +338,11 @@
             showBanner(true, '接口已删除');
         } catch (e) { showBanner(false, '删除接口异常'); }
     }
-    function toggleForm() {
-        document.getElementById('formBlock').classList.toggle('show');
+    function openCreateApiModal() {
+        document.getElementById('createApiModal').classList.add('show');
+    }
+    function closeCreateApiModal() {
+        document.getElementById('createApiModal').classList.remove('show');
     }
     document.addEventListener('DOMContentLoaded', function() { loadApis(); });
 </script>

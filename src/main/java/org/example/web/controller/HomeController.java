@@ -6,6 +6,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.example.api.entity.ApiInfo;
 import org.example.api.mapper.ApiInfoMapper;
+import org.example.document.entity.Document;
+import org.example.document.mapper.DocumentMapper;
 import org.example.project.entity.Project;
 import org.example.project.mapper.ProjectMapper;
 import org.example.testcase.entity.TestCase;
@@ -39,6 +41,7 @@ public class HomeController {
     private final TestCaseMapper testCaseMapper;
     private final ProjectMapper projectMapper;
     private final TestCodeMapper testCodeMapper;
+    private final DocumentMapper documentMapper;
 
     private static final int RECENT_LIMIT = 10;
     private static final int PAGE_SIZE = 10;
@@ -67,13 +70,25 @@ public class HomeController {
         model.addAttribute("currentPage", page.getCurrent());
         model.addAttribute("totalPages", total == 0 ? 1 : (int) ((total + PAGE_SIZE - 1) / PAGE_SIZE));
         Map<Long, String> projectIdToName = new LinkedHashMap<>();
+        Map<Long, String> documentIdToName = new LinkedHashMap<>();
         for (ApiInfo api : list) {
             if (api.getProjectId() != null && !projectIdToName.containsKey(api.getProjectId())) {
                 Project p = projectMapper.selectById(api.getProjectId());
                 projectIdToName.put(api.getProjectId(), p != null ? p.getName() : "");
             }
+            if (api.getDocumentId() != null && !documentIdToName.containsKey(api.getDocumentId())) {
+                Document doc = documentMapper.selectById(api.getDocumentId());
+                documentIdToName.put(api.getDocumentId(), doc != null && doc.getTitle() != null ? doc.getTitle() : "");
+            }
         }
         model.addAttribute("projectIdToName", projectIdToName);
+        model.addAttribute("documentIdToName", documentIdToName);
+        Map<String, String> caseGenStatusDisplay = new LinkedHashMap<>();
+        caseGenStatusDisplay.put("pending", "未生成");
+        caseGenStatusDisplay.put("generating", "生成中");
+        caseGenStatusDisplay.put("done", "已生成");
+        caseGenStatusDisplay.put("failed", "失败");
+        model.addAttribute("caseGenStatusDisplay", caseGenStatusDisplay);
         return "api/apis";
     }
 
@@ -104,6 +119,16 @@ public class HomeController {
         }
         model.addAttribute("projectIdToName", projectIdToName);
         model.addAttribute("apiIdToName", apiIdToName);
+        Map<String, String> codeGenStatusDisplay = new LinkedHashMap<>();
+        codeGenStatusDisplay.put("pending", "未生成");
+        codeGenStatusDisplay.put("generating", "生成中");
+        codeGenStatusDisplay.put("done", "已生成");
+        codeGenStatusDisplay.put("failed", "失败");
+        model.addAttribute("codeGenStatusDisplay", codeGenStatusDisplay);
+        Map<String, String> statusDisplay = new LinkedHashMap<>();
+        statusDisplay.put("active", "启用");
+        statusDisplay.put("disabled", "禁用");
+        model.addAttribute("statusDisplay", statusDisplay);
         return "testcase/testcases";
     }
 
@@ -123,6 +148,16 @@ public class HomeController {
         model.addAttribute("apiId", tc.getApiId());
         model.addAttribute("projectName", project != null ? project.getName() : "项目");
         model.addAttribute("apiName", api != null ? api.getApiName() : "接口");
+        Map<String, String> codeGenStatusDisplay = new LinkedHashMap<>();
+        codeGenStatusDisplay.put("pending", "未生成");
+        codeGenStatusDisplay.put("generating", "生成中");
+        codeGenStatusDisplay.put("done", "已生成");
+        codeGenStatusDisplay.put("failed", "失败");
+        model.addAttribute("codeGenStatusDisplay", codeGenStatusDisplay);
+        Map<String, String> statusDisplay = new LinkedHashMap<>();
+        statusDisplay.put("active", "启用");
+        statusDisplay.put("disabled", "禁用");
+        model.addAttribute("statusDisplay", statusDisplay);
         return "testcase/testcase-detail";
     }
 
@@ -184,6 +219,11 @@ public class HomeController {
         model.addAttribute("projectIdToName", projectIdToName);
         model.addAttribute("apiIdToName", apiIdToName);
         model.addAttribute("testCaseIdToCaseName", testCaseIdToCaseName);
+        Map<String, String> codeStatusDisplay = new LinkedHashMap<>();
+        codeStatusDisplay.put("generated", "已生成");
+        codeStatusDisplay.put("saved", "已保存");
+        codeStatusDisplay.put("deprecated", "已废弃");
+        model.addAttribute("codeStatusDisplay", codeStatusDisplay);
         return "testcode/testcodes";
     }
 

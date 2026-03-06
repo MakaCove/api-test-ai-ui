@@ -51,7 +51,7 @@ CREATE TABLE t_document (
     document_type         VARCHAR(32)  DEFAULT 'markdown' COMMENT '类型：markdown / word / text 等',
     original_content      LONGTEXT     DEFAULT NULL COMMENT '原始文档内容',
     standardized_content  LONGTEXT     DEFAULT NULL COMMENT '标准化后的文档内容',
-    status                VARCHAR(32)  DEFAULT 'pending' COMMENT '状态：pending / standardized / done / failed',
+    status                VARCHAR(32)  DEFAULT 'pending' COMMENT '状态：pending=待处理 standardized=已标准化 extracting=AI提取中 done=接口提取完成 failed=失败',
     error_message         VARCHAR(1024) DEFAULT NULL COMMENT '失败原因',
     created_at            DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at            DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -75,12 +75,15 @@ CREATE TABLE t_api_info (
     request_params  TEXT         DEFAULT NULL COMMENT '请求参数结构（JSON）',
     response_schema TEXT         DEFAULT NULL COMMENT '响应结构（JSON）',
     status          VARCHAR(32)  DEFAULT 'active' COMMENT '状态：active / disabled',
+    case_gen_status VARCHAR(32)  DEFAULT 'pending' COMMENT '用例生成状态：pending=未生成 generating=生成中 done=已生成 failed=失败',
     created_at      DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at      DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
     PRIMARY KEY (id),
     KEY idx_project_id (project_id),
     KEY idx_document_id (document_id)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='接口信息表';
+
+-- 已有库升级：ALTER TABLE t_api_info ADD COLUMN case_gen_status VARCHAR(32) DEFAULT 'pending' COMMENT '用例生成状态：pending=未生成 generating=生成中 done=已生成 failed=失败';
 
 -- ------------------------------------------------------------
 -- 5. 测试用例表
@@ -98,6 +101,7 @@ CREATE TABLE t_test_case (
     validation_rules   TEXT         DEFAULT NULL COMMENT '校验规则（JSON）',
     priority           INT          DEFAULT 3 COMMENT '优先级：1-4',
     status             VARCHAR(32)  DEFAULT 'active' COMMENT '状态',
+    code_gen_status    VARCHAR(32)  DEFAULT 'pending' COMMENT '代码生成状态：pending=未生成 generating=生成中 done=已生成 failed=失败',
     deleted_at         DATETIME     DEFAULT NULL COMMENT '软删除时间，NULL 表示未删除',
     created_at         DATETIME     DEFAULT CURRENT_TIMESTAMP COMMENT '创建时间',
     updated_at         DATETIME     DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP COMMENT '更新时间',
@@ -106,6 +110,8 @@ CREATE TABLE t_test_case (
     KEY idx_api_id (api_id),
     KEY idx_api_deleted (api_id, deleted_at)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci COMMENT='测试用例表';
+
+-- 已有库升级：ALTER TABLE t_test_case ADD COLUMN code_gen_status VARCHAR(32) DEFAULT 'pending' COMMENT '代码生成状态：pending=未生成 generating=生成中 done=已生成 failed=失败';
 
 -- ------------------------------------------------------------
 -- 6. 测试代码表

@@ -35,6 +35,7 @@ public class ApiPageController {
         model.addAttribute("apiId", apiId);
         model.addAttribute("projectName", project != null ? project.getName() : "项目");
         model.addAttribute("apiName", apiInfo != null ? apiInfo.getApiName() : "接口");
+        model.addAttribute("apiCaseGenStatus", apiInfo != null && apiInfo.getCaseGenStatus() != null ? apiInfo.getCaseGenStatus() : "pending");
         // 从「接口列表」点详情进入时高亮接口列表并简化面包屑
         model.addAttribute("fromApis", "apis".equalsIgnoreCase(from));
         return "testcase/testcase-list";

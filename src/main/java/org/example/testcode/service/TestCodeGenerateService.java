@@ -106,6 +106,16 @@ public class TestCodeGenerateService {
             testCodeMapper.insert(code);
             saved.add(code);
         }
+        for (TestCode code : saved) {
+            if (code.getTestCaseId() != null) {
+                TestCase tc = testCaseMapper.selectById(code.getTestCaseId());
+                if (tc != null) {
+                    tc.setCodeGenStatus("done");
+                    tc.setUpdatedAt(now);
+                    testCaseMapper.updateById(tc);
+                }
+            }
+        }
         log.info("接口 {} 写入 {} 条测试代码", apiId, saved.size());
         return saved;
     }
@@ -164,6 +174,12 @@ public class TestCodeGenerateService {
             code.setUpdatedAt(now);
             testCodeMapper.insert(code);
             saved.add(code);
+        }
+        TestCase tc = testCaseMapper.selectById(testCaseId);
+        if (tc != null) {
+            tc.setCodeGenStatus("done");
+            tc.setUpdatedAt(now);
+            testCaseMapper.updateById(tc);
         }
         return saved;
     }

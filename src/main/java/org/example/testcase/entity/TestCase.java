@@ -46,6 +46,9 @@ public class TestCase {
 
     private String status;
 
+    /** 代码生成状态：pending=未生成 generating=生成中 done=已生成 failed=失败 */
+    private String codeGenStatus;
+
     /** 软删除时间，非空表示已删除 */
     private LocalDateTime deletedAt;
 

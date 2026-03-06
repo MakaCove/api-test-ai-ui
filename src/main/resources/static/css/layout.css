@@ -264,6 +264,16 @@ body {
     box-shadow: 0 4px 16px rgba(56, 189, 248, 0.35);
 }
 
+/* 禁用按钮：置灰、不可点击 */
+.btn-primary:disabled,
+.btn-secondary:disabled,
+.btn:disabled,
+button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    pointer-events: none;
+}
+
 .btn-secondary {
     background: var(--bg-input);
     color: var(--text-primary);
@@ -385,6 +395,17 @@ textarea {
     border-bottom: 1px solid rgba(148, 163, 184, 0.1);
 }
 
+/* 可横向滚动的表格：各列设最小宽度，平铺展示不挤压（操作列除外，由后面规则单独控制） */
+.table-scroll-wrap .data-table th,
+.table-scroll-wrap .data-table td {
+    min-width: 4.5em;
+    box-sizing: border-box;
+}
+.table-scroll-wrap .data-table th:last-child,
+.table-scroll-wrap .data-table td:last-child {
+    min-width: min-content;
+}
+
 .data-table th {
     font-weight: 500;
     color: var(--text-secondary);
@@ -403,6 +424,85 @@ textarea {
 
 .data-table td {
     color: var(--text-primary);
+}
+
+/* 表格横向滚动：操作列固定右侧，其余列可左右滑动 */
+.table-scroll-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+}
+/* 滚动条样式：与深色主题一致 */
+.table-scroll-wrap::-webkit-scrollbar {
+    height: 8px;
+}
+.table-scroll-wrap::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.6);
+    border-radius: 4px;
+}
+.table-scroll-wrap::-webkit-scrollbar-thumb {
+    background: rgba(71, 85, 105, 0.8);
+    border-radius: 4px;
+}
+.table-scroll-wrap::-webkit-scrollbar-thumb:hover {
+    background: rgba(100, 116, 139, 0.9);
+}
+/* 表格最小宽度由内容撑开，保证列可平铺不挤压；窄屏时出现横向滚动 */
+.table-scroll-wrap .data-table.table-ops-wide {
+    min-width: max-content;
+    width: 100%;
+}
+/* 操作列固定在右侧，宽度随按钮/链接数量自适应（不固定死） */
+.data-table.table-ops-wide th:last-child,
+.data-table.table-ops-wide td:last-child {
+    position: sticky;
+    right: 0;
+    z-index: 1;
+    white-space: nowrap;
+    min-width: min-content;
+    background: var(--bg-card);
+    box-shadow: -8px 0 12px rgba(0, 0, 0, 0.25);
+}
+.data-table.table-ops-wide th:last-child {
+    z-index: 2;
+}
+.data-table.table-ops-wide tbody tr:hover td:last-child {
+    background: rgba(56, 189, 248, 0.08);
+}
+/* 操作列内按钮/链接用 flex 留出间距 */
+.data-table.table-ops-wide td:last-child {
+    display: flex;
+    flex-wrap: nowrap;
+    gap: 8px;
+    align-items: center;
+}
+.data-table.table-ops-wide td:last-child .btn,
+.data-table.table-ops-wide td:last-child .link-btn {
+    flex-shrink: 0;
+}
+
+/* 接口管理：状态、用例状态列不换行且保证最小宽度，避免被挤压 */
+.data-table .col-status,
+.data-table .col-case-status {
+    white-space: nowrap;
+}
+.data-table .col-case-status {
+    min-width: 5.5em;
+}
+
+/* 接口管理：名称列保证最小宽度，避免长名称换行 */
+.data-table .col-name {
+    white-space: nowrap;
+    min-width: 7em;
+}
+
+/* 接口管理：所属文档、创建时间列不换行且保证最小宽度 */
+.data-table .col-doc {
+    white-space: nowrap;
+    min-width: 10em;
+}
+.data-table .col-created {
+    white-space: nowrap;
+    min-width: 11em;
 }
 
 /* ========== 标签 ========== */

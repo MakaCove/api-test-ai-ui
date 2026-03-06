@@ -16,6 +16,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 
@@ -62,9 +63,24 @@ public class DocumentAnalyzeService {
     }
 
     /**
-     * 点击「分析」时：基于标准化文档（若有）用 AI 提取接口信息并写入 t_api_info。
+     * 仅将文档状态置为「AI提取中」，供控制器在异步提取前调用，避免重复点击。
      */
-    @Transactional
+    @Transactional(rollbackFor = Exception.class)
+    public void setExtracting(Long projectId, Long documentId) {
+        Document doc = documentMapper.selectById(documentId);
+        if (doc == null || !projectId.equals(doc.getProjectId())) {
+            throw new IllegalArgumentException("文档不存在或不属于当前项目");
+        }
+        doc.setStatus("extracting");
+        doc.setErrorMessage(null);
+        doc.setUpdatedAt(LocalDateTime.now());
+        documentMapper.updateById(doc);
+    }
+
+    /**
+     * 基于标准化文档（若有）用 AI 提取接口信息并写入 t_api_info；成功置 done，失败置 failed。
+     */
+    @Transactional(rollbackFor = Exception.class)
     public List<ApiInfo> analyzeAndGenerateApis(Long projectId, Long documentId) {
         log.info("AI 提取接口信息 projectId={} documentId={}", projectId, documentId);
         Document doc = documentMapper.selectById(documentId);
@@ -80,22 +96,31 @@ public class DocumentAnalyzeService {
             throw new IllegalArgumentException("文档内容为空，请先完成标准化或填写原始内容");
         }
 
-        String userPrompt = String.format(AiPrompt.USER_DOCUMENT_EXTRACT_APIS, content);
-        String aiResult = aiClientService.analyzeDocumentToApis(AiPrompt.SYSTEM_DOCUMENT_EXTRACT_APIS, userPrompt);
+        // 状态已在控制器中置为 extracting，此处只做提取逻辑
+        try {
+            String userPrompt = String.format(AiPrompt.USER_DOCUMENT_EXTRACT_APIS, content);
+            String aiResult = aiClientService.analyzeDocumentToApis(AiPrompt.SYSTEM_DOCUMENT_EXTRACT_APIS, userPrompt);
 
-        // 简单清理 markdown 代码块标记
-        String clean = cleanMarkdown(aiResult);
+            String clean = cleanMarkdown(aiResult);
+            List<ApiInfo> apiInfos = parseAndSaveApis(projectId, documentId, clean);
 
-        List<ApiInfo> apiInfos = parseAndSaveApis(projectId, documentId, clean);
+            String standardized = buildStandardizedMarkdown(doc.getTitle(), apiInfos);
+            doc.setStandardizedContent(standardized);
+            doc.setStatus("done");
+            doc.setErrorMessage(null);
+            doc.setUpdatedAt(LocalDateTime.now());
+            documentMapper.updateById(doc);
 
-        // 生成标准化文档（Markdown），便于预览与导出
-        String standardized = buildStandardizedMarkdown(doc.getTitle(), apiInfos);
-        doc.setStandardizedContent(standardized);
-        doc.setStatus("done");
-        doc.setUpdatedAt(LocalDateTime.now());
-        documentMapper.updateById(doc);
-
-        return apiInfos;
+            return apiInfos;
+        } catch (Exception e) {
+            doc.setStatus("failed");
+            doc.setErrorMessage(e.getMessage() != null ? e.getMessage() : "接口提取失败");
+            doc.setUpdatedAt(LocalDateTime.now());
+            documentMapper.updateById(doc);
+            log.warn("AI 提取接口信息失败 documentId={}: {}", documentId, e.getMessage());
+            // 不再 rethrow，否则事务回滚会导致「失败」状态写不进去，界面一直显示 AI提取中
+            return Collections.emptyList();
+        }
     }
 
     private String cleanMarkdown(String content) {

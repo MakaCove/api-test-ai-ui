@@ -49,7 +49,7 @@
                     <div class="empty-state">
                         <p>该用例尚未生成自动化代码。</p>
                         <p>点击下方按钮为该用例生成 JUnit 5 风格的接口测试代码。</p>
-                        <button type="button" class="btn btn-primary" id="btnGenCode">AI生成测试用例自动化代码</button>
+                        <button type="button" class="btn btn-primary" id="btnGenCode" th:disabled="${case.codeGenStatus == 'generating'}" th:text="${case.codeGenStatus == 'generating' ? '生成中' : 'AI生成测试用例自动化代码'}">AI生成测试用例自动化代码</button>
                     </div>
                 </th:block>
             </div>
@@ -93,8 +93,11 @@
                     showBanner(false, err.message || '生成测试代码失败');
                     return;
                 }
-                showBanner(true, '已为该用例生成测试代码，页面即将刷新');
-                setTimeout(function() { window.location.reload(); }, 1200);
+                var data = await resp.json();
+                showBanner(true, data.message || '已开始生成，请刷新页面查看');
+                btnGen.disabled = true;
+                btnGen.textContent = '生成中';
+                setTimeout(function() { window.location.reload(); }, 2000);
             } catch (e) {
                 showBanner(false, '生成测试代码异常，请查看控制台');
             }

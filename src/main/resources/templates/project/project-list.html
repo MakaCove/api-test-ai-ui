@@ -28,7 +28,8 @@
                         <button type="button" class="btn btn-primary" onclick="createProject()">保存</button>
                     </div>
                 </form>
-                <table id="projectTable" class="data-table" style="display:none;">
+                <div class="table-scroll-wrap" id="projectTableWrap" style="display:none;">
+                    <table id="projectTable" class="data-table table-ops-wide">
                     <thead>
                     <tr>
                         <th>ID</th>
@@ -39,7 +40,8 @@
                     </tr>
                     </thead>
                     <tbody id="projectTbody"></tbody>
-                </table>
+                    </table>
+                </div>
                 <div class="empty-state" id="emptyHint">还没有任何项目，点击「新建项目」开始吧。</div>
                 <div id="paginationWrap" class="pagination-wrap" style="display:none;"></div>
             </div>
@@ -52,15 +54,19 @@
 
     function renderPagination(total, page, totalPages) {
         const wrap = document.getElementById('paginationWrap');
-        if (!wrap || totalPages <= 1) { if (wrap) wrap.style.display = 'none'; return; }
-        let html = '<span class="pagination-info">共 ' + total + ' 条，第 ' + page + ' / ' + totalPages + ' 页</span><nav class="pagination">';
-        if (page > 1) html += '<a href="javascript:void(0)" data-page="' + (page - 1) + '">上一页</a>';
-        for (let p = 1; p <= totalPages; p++) {
-            if (p === page) html += '<span class="page-current">' + p + '</span>';
-            else html += '<a href="javascript:void(0)" data-page="' + p + '">' + p + '</a>';
+        if (!wrap) return;
+        if (total === 0) { wrap.style.display = 'none'; return; }
+        let html = '<span class="pagination-info">共 ' + total + ' 条，第 ' + page + ' / ' + totalPages + ' 页</span>';
+        if (totalPages > 1) {
+            html += '<nav class="pagination">';
+            if (page > 1) html += '<a href="javascript:void(0)" data-page="' + (page - 1) + '">上一页</a>';
+            for (let p = 1; p <= totalPages; p++) {
+                if (p === page) html += '<span class="page-current">' + p + '</span>';
+                else html += '<a href="javascript:void(0)" data-page="' + p + '">' + p + '</a>';
+            }
+            if (page < totalPages) html += '<a href="javascript:void(0)" data-page="' + (page + 1) + '">下一页</a>';
+            html += '</nav>';
         }
-        if (page < totalPages) html += '<a href="javascript:void(0)" data-page="' + (page + 1) + '">下一页</a>';
-        html += '</nav>';
         wrap.innerHTML = html;
         wrap.style.display = 'flex';
         wrap.querySelectorAll('a[data-page]').forEach(a => { a.addEventListener('click', function() { goToPage(parseInt(this.getAttribute('data-page'), 10)); }); });
@@ -78,12 +84,12 @@
             const total = data.total || 0;
             const totalPages = total === 0 ? 1 : Math.ceil(total / PAGE_SIZE);
             const tbody = document.getElementById('projectTbody');
-            const table = document.getElementById('projectTable');
+            const tableWrap = document.getElementById('projectTableWrap');
             const emptyHint = document.getElementById('emptyHint');
-            if (!tbody || !table || !emptyHint) return;
+            if (!tbody || !tableWrap || !emptyHint) return;
             tbody.innerHTML = '';
             if (records.length === 0) {
-                table.style.display = 'none';
+                tableWrap.style.display = 'none';
                 emptyHint.style.display = 'block';
                 document.getElementById('paginationWrap').style.display = 'none';
                 return;
@@ -100,7 +106,7 @@
                 `;
                 tbody.appendChild(tr);
             });
-            table.style.display = 'table';
+            tableWrap.style.display = 'block';
             emptyHint.style.display = 'none';
             renderPagination(total, currentPage, totalPages);
         } catch (e) { console.error('加载项目异常', e); }

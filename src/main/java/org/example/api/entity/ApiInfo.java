@@ -38,7 +38,11 @@ public class ApiInfo {
      */
     private String responseSchema;
 
+    /** 接口启用状态：active / disabled */
     private String status;
+
+    /** 用例生成状态：pending=未生成 generating=生成中 done=已生成 failed=失败，用于控制「AI生成用例」是否可点击 */
+    private String caseGenStatus;
 
     private LocalDateTime createdAt;
 

@@ -6,7 +6,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" th:href="@{/css/layout.css}">
 </head>
-<body th:data-project-id="${projectId}">
+<body th:data-project-id="${projectId}" th:attr="data-project-name=${projectName}">
 <div class="app-layout">
     <th:block th:replace="~{layout :: sidebar('projects')}"></th:block>
     <main class="main-area">
@@ -23,41 +23,57 @@
                 <div class="card-header">
                     <div class="card-desc" style="flex:1;margin:0;">支持 .txt / .doc / .docx / .md，粘贴内容保存后触发 AI 标准化。</div>
                     <div class="action-bar">
-                        <button class="btn btn-primary" onclick="toggleForm()">粘贴文档</button>
+                        <button class="btn btn-primary" onclick="openPasteModal()">粘贴文档</button>
                         <button class="btn btn-secondary" onclick="document.getElementById('fileInput').click()">上传文件</button>
                         <input type="file" id="fileInput" accept=".txt,.doc,.docx,.md" style="display:none;">
                     </div>
                 </div>
                 <div id="banner" class="banner"></div>
-                <div id="formBlock" class="form-block">
-                    <div class="form-row">
-                        <input id="docTitle" placeholder="文档标题（可选）" style="flex:2;min-width:160px;">
-                        <select id="docType" style="flex:1;min-width:140px;">
-                            <option value="markdown">Markdown</option>
-                            <option value="word">Word（粘贴内容）</option>
-                            <option value="text">纯文本</option>
-                            <option value="swagger">Swagger JSON</option>
-                            <option value="openapi">OpenAPI</option>
-                        </select>
-                    </div>
-                    <textarea id="docContent" placeholder="在这里粘贴接口文档内容" style="min-height:120px;"></textarea>
-                    <div class="form-row" style="justify-content:flex-end;">
-                        <button type="button" class="btn btn-primary" onclick="createDocument()">保存文档</button>
+                <div id="pasteModal" class="modal-overlay">
+                    <div class="modal-box">
+                        <div class="modal-title">粘贴文档</div>
+                        <div class="modal-body">
+                            <div class="form-group">
+                                <label for="docTitle">文档标题</label>
+                                <input id="docTitle" placeholder="文档标题（可选）">
+                            </div>
+                            <div class="form-group">
+                                <label for="docType">文档类型</label>
+                                <select id="docType">
+                                    <option value="markdown">Markdown</option>
+                                    <option value="word">Word（粘贴内容）</option>
+                                    <option value="text">纯文本</option>
+                                    <option value="swagger">Swagger JSON</option>
+                                    <option value="openapi">OpenAPI</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label for="docContent">文档内容</label>
+                                <textarea id="docContent" placeholder="在这里粘贴接口文档内容" style="min-height:160px;"></textarea>
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" onclick="closePasteModal()">取消</button>
+                            <button type="button" class="btn btn-primary" onclick="createDocument()">保存文档</button>
+                        </div>
                     </div>
                 </div>
-                <table id="docTable" class="data-table" style="display:none;">
+                <div class="table-scroll-wrap" id="docTableWrap" style="display:none;">
+                    <table id="docTable" class="data-table table-ops-wide">
                     <thead>
                     <tr>
                         <th>ID</th>
                         <th>标题</th>
                         <th>类型</th>
+                        <th>所属项目</th>
                         <th>状态</th>
                         <th>创建时间</th>
                         <th>操作</th>
                     </tr>
                     </thead>
                     <tbody id="docTbody"></tbody>
-                </table>
+                    </table>
+                </div>
                 <div class="empty-state" id="docEmpty">暂无文档，可点击「粘贴文档」或「上传文件」新增。</div>
                 <div id="paginationWrap" class="pagination-wrap" style="display:none;"></div>
             </div>
@@ -70,15 +86,19 @@
 
     function renderDocPagination(total, page, totalPages) {
         const wrap = document.getElementById('paginationWrap');
-        if (!wrap || totalPages <= 1) { if (wrap) wrap.style.display = 'none'; return; }
-        let html = '<span class="pagination-info">共 ' + total + ' 条，第 ' + page + ' / ' + totalPages + ' 页</span><nav class="pagination">';
-        if (page > 1) html += '<a href="javascript:void(0)" data-page="' + (page - 1) + '">上一页</a>';
-        for (let p = 1; p <= totalPages; p++) {
-            if (p === page) html += '<span class="page-current">' + p + '</span>';
-            else html += '<a href="javascript:void(0)" data-page="' + p + '">' + p + '</a>';
+        if (!wrap) return;
+        if (total === 0) { wrap.style.display = 'none'; return; }
+        let html = '<span class="pagination-info">共 ' + total + ' 条，第 ' + page + ' / ' + totalPages + ' 页</span>';
+        if (totalPages > 1) {
+            html += '<nav class="pagination">';
+            if (page > 1) html += '<a href="javascript:void(0)" data-page="' + (page - 1) + '">上一页</a>';
+            for (let p = 1; p <= totalPages; p++) {
+                if (p === page) html += '<span class="page-current">' + p + '</span>';
+                else html += '<a href="javascript:void(0)" data-page="' + p + '">' + p + '</a>';
+            }
+            if (page < totalPages) html += '<a href="javascript:void(0)" data-page="' + (page + 1) + '">下一页</a>';
+            html += '</nav>';
         }
-        if (page < totalPages) html += '<a href="javascript:void(0)" data-page="' + (page + 1) + '">下一页</a>';
-        html += '</nav>';
         wrap.innerHTML = html;
         wrap.style.display = 'flex';
         wrap.querySelectorAll('a[data-page]').forEach(a => { a.addEventListener('click', function() { docCurrentPage = parseInt(this.getAttribute('data-page'), 10); loadDocuments(); }); });
@@ -105,23 +125,27 @@
             const total = data.total || 0;
             const totalPages = total === 0 ? 1 : Math.ceil(total / DOC_PAGE_SIZE);
             const tbody = document.getElementById('docTbody');
-            const table = document.getElementById('docTable');
+            const tableWrap = document.getElementById('docTableWrap');
             const empty = document.getElementById('docEmpty');
             const paginationWrap = document.getElementById('paginationWrap');
+            const projectName = document.body.getAttribute('data-project-name') || '—';
             tbody.innerHTML = '';
-            if (records.length === 0) { table.style.display = 'none'; empty.style.display = 'block'; if (paginationWrap) paginationWrap.style.display = 'none'; return; }
-            const statusText = { pending: '待处理', standardized: '已标准化', done: '已完成', failed: '失败' };
+            if (records.length === 0) { if (tableWrap) tableWrap.style.display = 'none'; empty.style.display = 'block'; if (paginationWrap) paginationWrap.style.display = 'none'; return; }
+            // 文档状态：pending=待处理 standardized=已标准化 extracting=AI提取中(不可再点提取) done=接口提取完成 failed=失败
+            const statusText = { pending: '待处理', standardized: '已标准化', extracting: 'AI提取中', done: '接口提取完成', failed: '失败' };
+            function statusToLabel(s) { return statusText[s] || '未知'; }
             records.forEach(d => {
                 const tr = document.createElement('tr');
                 const type = d.documentType || '-';
                 const status = d.status || 'pending';
-                const canAnalyze = status === 'pending' || status === 'failed' || status === 'standardized';
-                const statusLabel = statusText[status] || status;
+                const canAnalyze = status === 'pending' || status === 'failed' || status === 'standardized' || status === 'done';
+                const statusLabel = statusToLabel(status);
                 const safeTitle = (d.title ?? '').replace(/'/g, "\\'");
                 tr.innerHTML = `
                     <td>${d.id}</td>
                     <td>${d.title ?? ''}</td>
                     <td><span class="tag">${type}</span></td>
+                    <td>${projectName}</td>
                     <td><span class="tag">${statusLabel}</span></td>
                     <td>${d.createdAt ? (typeof d.createdAt === 'string' ? d.createdAt.replace('T', ' ').substring(0, 19) : d.createdAt) : ''}</td>
                     <td>
@@ -132,7 +156,7 @@
                 `;
                 tbody.appendChild(tr);
             });
-            table.style.display = 'table';
+            if (tableWrap) tableWrap.style.display = 'block';
             empty.style.display = 'none';
             renderDocPagination(total, docCurrentPage, totalPages);
         } catch (e) { console.error('加载文档异常', e); }
@@ -149,6 +173,7 @@
             const resp = await fetch(`/api/projects/${projectId}/documents/text`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, content, documentType: typeSelect.value }) });
             if (!resp.ok) { showBanner(false, '保存文档失败'); return; }
             titleInput.value = ''; contentInput.value = '';
+            closePasteModal();
             await loadDocuments(1);
             showBanner(true, '保存文档成功');
         } catch (e) { showBanner(false, '保存文档异常'); }
@@ -157,10 +182,18 @@
         const projectId = getProjectId();
         try {
             const resp = await fetch(`/api/projects/${projectId}/documents/${documentId}/analyze`, { method: 'POST' });
-            if (!resp.ok) { showBanner(false, '分析文档失败'); return; }
-            await loadDocuments();
-            showBanner(true, '文档分析请求已完成');
-        } catch (e) { showBanner(false, '分析文档异常'); }
+            if (!resp.ok) {
+                const err = await resp.json().catch(function() { return {}; });
+                showBanner(false, err.message || '分析文档失败');
+                await loadDocuments();
+                return;
+            }
+            await loadDocuments(1);
+            showBanner(true, '已开始提取，状态已更新为「AI提取中」，请稍后刷新查看结果');
+        } catch (e) {
+            showBanner(false, '分析文档异常');
+            await loadDocuments(1);
+        }
     }
     async function renameDocument(id, currentTitle) {
         const title = prompt('请输入新的文档标题：', currentTitle || '');
@@ -185,9 +218,17 @@
             showBanner(true, '文档已删除');
         } catch (e) { showBanner(false, '删除异常'); }
     }
-    function toggleForm() {
-        document.getElementById('formBlock').classList.toggle('show');
+    function openPasteModal() {
+        var overlay = document.getElementById('pasteModal');
+        if (overlay) overlay.classList.add('show');
     }
+    function closePasteModal() {
+        var overlay = document.getElementById('pasteModal');
+        if (overlay) overlay.classList.remove('show');
+    }
+    document.getElementById('pasteModal').addEventListener('click', function(e) {
+        if (e.target === this) closePasteModal();
+    });
     document.getElementById('fileInput').addEventListener('change', function(e) {
         const file = e.target.files && e.target.files[0];
         if (file) uploadDocument(file);

@@ -53,7 +53,10 @@ public class TestCaseApiController {
         testCase.setProjectId(api.getProjectId());
         testCase.setApiId(apiId);
         if (testCase.getStatus() == null || testCase.getStatus().isBlank()) {
-            testCase.setStatus("pending");
+            testCase.setStatus("active");
+        }
+        if (testCase.getCodeGenStatus() == null || testCase.getCodeGenStatus().isBlank()) {
+            testCase.setCodeGenStatus("pending");
         }
         if (testCase.getPriority() == null) {
             testCase.setPriority(3);

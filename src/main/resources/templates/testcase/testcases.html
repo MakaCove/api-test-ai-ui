@@ -5,7 +5,6 @@
     <title>用例列表 - API Test AI</title>
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" th:href="@{/css/layout.css}">
-    <style>.action-cell { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; } .action-cell .link-btn { margin-right: 2px; }</style>
 </head>
 <body>
 <div class="app-layout">
@@ -17,33 +16,55 @@
             </div>
             <div class="page-header">
                 <h1>用例列表</h1>
-                <p class="page-desc">最近添加的测试用例，点击「详情」查看详情，「代码」查看该用例的自动化代码，「AI生成」可一键生成代码。</p>
+                <p class="page-desc">最近添加的测试用例，点击「详情」查看详情，「代码」查看该用例的自动化代码，「AI生成代码」可一键生成。</p>
             </div>
             <div class="card">
-                <table th:if="${recentCases != null and !recentCases.isEmpty()}" class="data-table">
-                    <thead>
-                        <tr><th>用例名称</th><th>类型</th><th>所属接口</th><th>所属项目</th><th>操作</th></tr>
-                    </thead>
-                    <tbody>
-                        <tr th:each="tc : ${recentCases}">
-                            <td th:text="${tc.caseName}">-</td>
-                            <td><span class="tag" th:text="${tc.caseType}">normal</span></td>
-                            <td th:text="${(apiIdToName != null and apiIdToName[tc.apiId] != null) ? apiIdToName[tc.apiId] : '—'}">—</td>
-                            <td th:text="${(projectIdToName != null and projectIdToName[tc.projectId] != null) ? projectIdToName[tc.projectId] : '—'}">—</td>
-                            <td>
-                                <div class="action-cell">
+                <div id="banner" class="banner"></div>
+                <div th:if="${recentCases != null and !recentCases.isEmpty()}" class="table-scroll-wrap">
+                    <table class="data-table table-ops-wide">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>用例名称</th>
+                                <th>类型</th>
+                                <th>所属接口</th>
+                                <th>所属项目</th>
+                                <th>优先级</th>
+                                <th>状态</th>
+                                <th class="col-case-status">代码状态</th>
+                                <th>创建时间</th>
+                                <th>操作</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr th:each="tc : ${recentCases}">
+                                <td th:text="${tc.id}">-</td>
+                                <td th:text="${tc.caseName}">-</td>
+                                <td><span class="tag" th:text="${tc.caseType}">normal</span></td>
+                                <td th:text="${apiIdToName != null and tc.apiId != null and apiIdToName[tc.apiId] != null ? apiIdToName[tc.apiId] : '—'}">—</td>
+                                <td th:text="${projectIdToName != null and tc.projectId != null and projectIdToName[tc.projectId] != null ? projectIdToName[tc.projectId] : '—'}">—</td>
+                                <td><span class="tag" th:text="|P${tc.priority != null ? tc.priority : 3}|">P3</span></td>
+                                <td><span class="tag" th:text="${statusDisplay != null and tc.status != null and statusDisplay[tc.status] != null ? statusDisplay[tc.status] : (tc.status != null ? tc.status : '启用')}">启用</span></td>
+                                <td class="col-case-status"><span class="tag" th:text="${codeGenStatusDisplay != null and tc.codeGenStatus != null and codeGenStatusDisplay[tc.codeGenStatus] != null ? codeGenStatusDisplay[tc.codeGenStatus] : '未生成'}">未生成</span></td>
+                                <td th:text="${tc.createdAt != null ? #temporals.format(tc.createdAt, 'yyyy-MM-dd HH:mm:ss') : '—'}">-</td>
+                                <td>
                                     <a th:href="@{/testcases/detail/{id}(id=${tc.id})}" class="link-btn">详情</a>
                                     <a th:href="@{/testcases/{caseId}/code(caseId=${tc.id})}" class="link-btn">代码</a>
-                                    <a th:href="${contextPath + '/testcases/detail/' + tc.id + '#gencode'}" class="btn btn-primary" style="padding:4px 10px;font-size:12px;">AI生成代码</a>
-                                </div>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                                    <th:block th:if="${tc.codeGenStatus != 'generating'}">
+                                        <button type="button" class="btn btn-primary" style="padding:4px 10px;font-size:12px;" th:attr="data-api-id=${tc.apiId},data-case-id=${tc.id}" onclick="generateCode(this)">AI生成代码</button>
+                                    </th:block>
+                                    <th:block th:if="${tc.codeGenStatus == 'generating'}">
+                                        <button type="button" class="btn btn-primary" style="padding:4px 10px;font-size:12px;" disabled>AI生成代码</button>
+                                    </th:block>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
                 <div th:if="${recentCases == null || recentCases.isEmpty()}" class="empty-state">暂无用例，请先在接口管理中选择接口并维护测试用例。</div>
-                <div th:if="${recentCases != null and !recentCases.isEmpty() and totalPages > 1}" class="pagination-wrap">
+                <div th:if="${recentCases != null and !recentCases.isEmpty()}" class="pagination-wrap">
                     <span class="pagination-info">共 <span th:text="${totalCases}">0</span> 条，第 <span th:text="${currentPage}">1</span> / <span th:text="${totalPages}">1</span> 页</span>
-                    <nav class="pagination">
+                    <nav th:if="${totalPages > 1}" class="pagination">
                         <a th:if="${currentPage > 1}" th:href="@{/testcases(page=${currentPage - 1})}" rel="prev">上一页</a>
                         <th:block th:each="p : ${#numbers.sequence(1, totalPages)}">
                             <a th:if="${p != currentPage}" th:href="@{/testcases(page=${p})}" th:text="${p}">1</a>
@@ -56,5 +77,37 @@
         </div>
     </main>
 </div>
+<script th:inline="javascript">
+    function showBanner(ok, msg) {
+        var el = document.getElementById('banner');
+        if (!el) return;
+        el.classList.remove('ok', 'err');
+        el.classList.add(ok ? 'ok' : 'err');
+        el.textContent = msg;
+        el.style.display = 'block';
+        setTimeout(function() { el.style.display = 'none'; }, 2500);
+    }
+    function generateCode(btn) {
+        var apiId = btn.getAttribute('data-api-id');
+        var caseId = btn.getAttribute('data-case-id');
+        if (!apiId || !caseId) return;
+        btn.disabled = true;
+        btn.textContent = '生成中';
+        fetch('/api/apis/' + apiId + '/testcodes/generate-case/' + caseId, { method: 'POST' })
+            .then(function(r) {
+                if (!r.ok) return r.json().then(function(e) { throw new Error(e.message || '生成失败'); });
+                return r.json();
+            })
+            .then(function(data) {
+                showBanner(true, data.message || '已开始生成，请刷新列表查看进度');
+                setTimeout(function() { window.location.reload(); }, 1500);
+            })
+            .catch(function(e) {
+                showBanner(false, e.message || 'AI生成代码异常');
+                btn.disabled = false;
+                btn.textContent = 'AI生成代码';
+            });
+    }
+</script>
 </body>
 </html>
