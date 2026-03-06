@@ -28,7 +28,7 @@
                             <td th:text="${c.className}">-</td>
                             <td><span class="tag" th:text="${c.language}">java</span></td>
                             <td><span class="tag" th:text="${c.framework}">junit5</span></td>
-                            <td th:text="${c.testCaseId != null} ? '用例#' + c.testCaseId : '—'">—</td>
+                            <td th:text="${(testCaseIdToCaseName != null and c.testCaseId != null and testCaseIdToCaseName.containsKey(c.testCaseId)) ? testCaseIdToCaseName.get(c.testCaseId) : (c.testCaseId != null ? '用例#' + c.testCaseId : '—')}">—</td>
                             <td th:text="${apiIdToName != null && apiIdToName.containsKey(c.apiId) ? apiIdToName.get(c.apiId) : '—'}">—</td>
                             <td th:text="${projectIdToName != null && projectIdToName.containsKey(c.projectId) ? projectIdToName.get(c.projectId) : '—'}">—</td>
                             <td><span class="tag" th:text="${c.status}">generated</span></td>

@@ -166,6 +166,7 @@ public class HomeController {
         model.addAttribute("totalPages", total == 0 ? 1 : (int) ((total + PAGE_SIZE - 1) / PAGE_SIZE));
         Map<Long, String> projectIdToName = new LinkedHashMap<>();
         Map<Long, String> apiIdToName = new LinkedHashMap<>();
+        Map<Long, String> testCaseIdToCaseName = new LinkedHashMap<>();
         for (TestCode c : list) {
             if (c.getProjectId() != null && !projectIdToName.containsKey(c.getProjectId())) {
                 Project p = projectMapper.selectById(c.getProjectId());
@@ -175,9 +176,14 @@ public class HomeController {
                 ApiInfo a = apiInfoMapper.selectById(c.getApiId());
                 apiIdToName.put(c.getApiId(), a != null ? a.getApiName() : "");
             }
+            if (c.getTestCaseId() != null && !testCaseIdToCaseName.containsKey(c.getTestCaseId())) {
+                TestCase tc = testCaseMapper.selectById(c.getTestCaseId());
+                testCaseIdToCaseName.put(c.getTestCaseId(), tc != null && tc.getCaseName() != null ? tc.getCaseName() : "用例#" + c.getTestCaseId());
+            }
         }
         model.addAttribute("projectIdToName", projectIdToName);
         model.addAttribute("apiIdToName", apiIdToName);
+        model.addAttribute("testCaseIdToCaseName", testCaseIdToCaseName);
         return "testcode/testcodes";
     }
 
