@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>系统配置 - API Test AI</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" th:href="@{/css/layout.css}">
+    <style>
+        .msg { margin-top: 12px; font-size: 13px; padding: 8px 12px; border-radius: 8px; display: none; }
+        .msg:not(.error) { background: rgba(34, 197, 94, 0.12); color: #86efac; }
+        .msg.error { background: rgba(239, 68, 68, 0.12); color: #fca5a5; }
+        /* 系统配置页输入框宽度适中 */
+        .main-area .card .form-group input { min-width: 360px; max-width: 480px; width: 100%; box-sizing: border-box; }
+    </style>
+</head>
+<body>
+<div class="app-layout">
+    <th:block th:replace="~{layout :: sidebar('settings')}"></th:block>
+    <main class="main-area">
+        <div class="container">
+            <div class="breadcrumb">
+                <a th:href="@{/}">工作台</a> &gt; 系统配置
+            </div>
+            <div class="page-header">
+                <h1>系统配置</h1>
+                <p class="page-desc">配置 AI 模型与测试代码输出路径。</p>
+            </div>
+            <div class="card" style="margin-bottom: 20px;">
+                <div class="card-title">AI 配置</div>
+                <div class="card-desc" style="margin-bottom: 16px;">配置用于文档分析与测试代码生成的模型信息。</div>
+                <div class="form-group">
+                    <label for="aiEndpoint">API Endpoint</label>
+                    <input id="aiEndpoint" placeholder="例如 https://api.openai.com/v1">
+                </div>
+                <div class="form-group">
+                    <label for="aiApiKey">API Key</label>
+                    <input id="aiApiKey" type="password" placeholder="建议使用环境变量或安全存储">
+                </div>
+                <div class="form-group">
+                    <label for="aiModel">模型名称</label>
+                    <input id="aiModel" placeholder="例如 gpt-4.1 / qwen-plus 等">
+                </div>
+                <div class="form-group">
+                    <label for="aiTemperature">Temperature</label>
+                    <input id="aiTemperature" placeholder="0.0 ~ 1.0，建议 0.2 ~ 0.5">
+                </div>
+                <div class="form-group">
+                    <label for="aiMaxTokens">Max Tokens</label>
+                    <input id="aiMaxTokens" placeholder="例如 4096">
+                </div>
+            </div>
+            <div class="card" style="margin-bottom: 20px;">
+                <div class="card-title">测试代码输出</div>
+                <div class="card-desc" style="margin-bottom: 16px;">配置生成的测试代码保存到本地工程的目录与包名。</div>
+                <div class="form-group">
+                    <label for="codeBaseDir">测试工程根目录</label>
+                    <input id="codeBaseDir" placeholder="例如 E:\IdeaProjects\your-test-project">
+                </div>
+                <div class="form-group">
+                    <label for="codeBasePackage">默认包名</label>
+                    <input id="codeBasePackage" placeholder="例如 com.example.api.test">
+                </div>
+            </div>
+            <button class="btn btn-primary" onclick="saveSettings()">保存配置</button>
+            <div id="msg" class="msg">配置已保存</div>
+        </div>
+    </main>
+</div>
+<script>
+    function setVal(id, val) {
+        const el = document.getElementById(id);
+        if (el) el.value = val || '';
+    }
+    async function loadSettings() {
+        try {
+            const resp = await fetch('/api/settings');
+            if (!resp.ok) {
+                console.error('加载配置失败', resp.status);
+                return;
+            }
+            const data = await resp.json();
+            setVal('aiEndpoint', data.aiEndpoint);
+            setVal('aiApiKey', data.aiApiKey);
+            setVal('aiModel', data.aiModel);
+            setVal('aiTemperature', data.aiTemperature);
+            setVal('aiMaxTokens', data.aiMaxTokens);
+            setVal('codeBaseDir', data.codeBaseDir);
+            setVal('codeBasePackage', data.codeBasePackage);
+        } catch (e) {
+            console.error('加载配置异常', e);
+        }
+    }
+
+    async function saveSettings() {
+        const msg = document.getElementById('msg');
+        if (msg) { msg.style.display = 'none'; msg.classList.remove('error'); }
+        const g = id => { const e = document.getElementById(id); return e ? e.value.trim() : ''; };
+        const body = {
+            aiEndpoint: g('aiEndpoint'),
+            aiApiKey: g('aiApiKey'),
+            aiModel: g('aiModel'),
+            aiTemperature: g('aiTemperature'),
+            aiMaxTokens: g('aiMaxTokens'),
+            codeBaseDir: g('codeBaseDir'),
+            codeBasePackage: g('codeBasePackage')
+        };
+
+        try {
+            const resp = await fetch('/api/settings', {
+                method: 'PUT',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(body)
+            });
+            if (!resp.ok) {
+                if (msg) { msg.textContent = '保存失败，状态码：' + resp.status; msg.classList.add('error'); msg.style.display = 'block'; }
+                return;
+            }
+            if (msg) { msg.textContent = '配置已保存'; msg.classList.remove('error'); msg.style.display = 'block'; }
+        } catch (e) {
+            console.error('保存配置异常', e);
+            if (msg) { msg.textContent = '保存配置异常，请查看控制台'; msg.classList.add('error'); msg.style.display = 'block'; }
+        }
+    }
+
+    document.addEventListener('DOMContentLoaded', loadSettings);
+</script>
+</body>
+</html>
+

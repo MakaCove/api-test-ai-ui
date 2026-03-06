@@ -1,0 +1,60 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>用例列表 - API Test AI</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" th:href="@{/css/layout.css}">
+    <style>.action-cell { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; } .action-cell .link-btn { margin-right: 2px; }</style>
+</head>
+<body>
+<div class="app-layout">
+    <th:block th:replace="~{layout :: sidebar('testcases')}"></th:block>
+    <main class="main-area">
+        <div class="container">
+            <div class="breadcrumb">
+                <a th:href="@{/}">工作台</a> &gt; 用例列表
+            </div>
+            <div class="page-header">
+                <h1>用例列表</h1>
+                <p class="page-desc">最近添加的测试用例，点击「详情」查看详情，「代码」查看该用例的自动化代码，「AI生成」可一键生成代码。</p>
+            </div>
+            <div class="card">
+                <table th:if="${recentCases != null and !recentCases.isEmpty()}" class="data-table">
+                    <thead>
+                        <tr><th>用例名称</th><th>类型</th><th>所属接口</th><th>所属项目</th><th>操作</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="tc : ${recentCases}">
+                            <td th:text="${tc.caseName}">-</td>
+                            <td><span class="tag" th:text="${tc.caseType}">normal</span></td>
+                            <td th:text="${(apiIdToName != null and apiIdToName[tc.apiId] != null) ? apiIdToName[tc.apiId] : '—'}">—</td>
+                            <td th:text="${(projectIdToName != null and projectIdToName[tc.projectId] != null) ? projectIdToName[tc.projectId] : '—'}">—</td>
+                            <td>
+                                <div class="action-cell">
+                                    <a th:href="@{/testcases/detail/{id}(id=${tc.id})}" class="link-btn">详情</a>
+                                    <a th:href="@{/testcases/{caseId}/code(caseId=${tc.id})}" class="link-btn">代码</a>
+                                    <a th:href="${contextPath + '/testcases/detail/' + tc.id + '#gencode'}" class="btn btn-primary" style="padding:4px 10px;font-size:12px;">AI生成代码</a>
+                                </div>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div th:if="${recentCases == null || recentCases.isEmpty()}" class="empty-state">暂无用例，请先在接口管理中选择接口并维护测试用例。</div>
+                <div th:if="${recentCases != null and !recentCases.isEmpty() and totalPages > 1}" class="pagination-wrap">
+                    <span class="pagination-info">共 <span th:text="${totalCases}">0</span> 条，第 <span th:text="${currentPage}">1</span> / <span th:text="${totalPages}">1</span> 页</span>
+                    <nav class="pagination">
+                        <a th:if="${currentPage > 1}" th:href="@{/testcases(page=${currentPage - 1})}" rel="prev">上一页</a>
+                        <th:block th:each="p : ${#numbers.sequence(1, totalPages)}">
+                            <a th:if="${p != currentPage}" th:href="@{/testcases(page=${p})}" th:text="${p}">1</a>
+                            <span th:if="${p == currentPage}" class="page-current" th:text="${p}">1</span>
+                        </th:block>
+                        <a th:if="${currentPage < totalPages}" th:href="@{/testcases(page=${currentPage + 1})}" rel="next">下一页</a>
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+</body>
+</html>

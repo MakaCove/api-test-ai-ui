@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<!-- 工作台首页：服务端注入 title、welcomeMessage、recentApis、recentCases、projectIdToName、apiIdToName；快捷入口与最近动态均来自 Model -->
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title th:text="${title} + ' - API Test AI'">工作台 - API Test AI</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" th:href="@{/css/layout.css}">
+    <style>
+        .dashboard {
+            max-width: 1100px;
+            margin: 0 auto;
+        }
+        .dashboard-hero {
+            margin-bottom: 36px;
+        }
+        .dashboard-hero h1 {
+            font-size: 28px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            margin: 0 0 8px;
+            background: linear-gradient(135deg, #f1f5f9 0%, #94a3b8 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+        .dashboard-hero p {
+            margin: 0;
+            font-size: 15px;
+            color: #94a3b8;
+            line-height: 1.5;
+        }
+        .quick-actions {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 16px;
+            margin-bottom: 40px;
+        }
+        .quick-action {
+            display: block;
+            text-decoration: none;
+            padding: 22px 20px;
+            border-radius: 16px;
+            background: linear-gradient(160deg, rgba(30, 41, 59, 0.6) 0%, rgba(15, 23, 42, 0.95) 100%);
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            transition: border-color 0.2s, transform 0.2s, box-shadow 0.2s;
+        }
+        .quick-action:hover {
+            border-color: rgba(56, 189, 248, 0.4);
+            transform: translateY(-2px);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
+        }
+        .quick-action-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            margin-bottom: 14px;
+        }
+        .quick-action:nth-child(1) .quick-action-icon { background: linear-gradient(135deg, rgba(56, 189, 248, 0.25), rgba(56, 189, 248, 0.1)); }
+        .quick-action:nth-child(2) .quick-action-icon { background: linear-gradient(135deg, rgba(34, 197, 94, 0.25), rgba(34, 197, 94, 0.1)); }
+        .quick-action:nth-child(3) .quick-action-icon { background: linear-gradient(135deg, rgba(234, 179, 8, 0.25), rgba(234, 179, 8, 0.1)); }
+        .quick-action:nth-child(4) .quick-action-icon { background: linear-gradient(135deg, rgba(168, 85, 247, 0.25), rgba(168, 85, 247, 0.1)); }
+        .quick-action:nth-child(5) .quick-action-icon { background: linear-gradient(135deg, rgba(148, 163, 184, 0.25), rgba(148, 163, 184, 0.1)); }
+        .quick-action-title {
+            font-size: 15px;
+            font-weight: 600;
+            color: #e2e8f0;
+            margin-bottom: 4px;
+        }
+        .quick-action-desc {
+            font-size: 12px;
+            color: #64748b;
+            line-height: 1.4;
+        }
+        .section-title {
+            font-size: 14px;
+            font-weight: 600;
+            color: #94a3b8;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            margin-bottom: 16px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.2);
+        }
+        .recent-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 24px;
+        }
+        @media (max-width: 768px) {
+            .recent-grid { grid-template-columns: 1fr; }
+        }
+        .recent-card {
+            border-radius: 16px;
+            background: linear-gradient(160deg, rgba(30, 41, 59, 0.4) 0%, rgba(15, 23, 42, 0.9) 100%);
+            border: 1px solid rgba(148, 163, 184, 0.18);
+            overflow: hidden;
+        }
+        .recent-card-header {
+            padding: 16px 20px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.12);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .recent-card-header h2 {
+            margin: 0;
+            font-size: 15px;
+            font-weight: 600;
+            color: #e2e8f0;
+        }
+        .recent-card-header a {
+            font-size: 12px;
+            color: #38bdf8;
+            text-decoration: none;
+        }
+        .recent-card-header a:hover { text-decoration: underline; }
+        .recent-list {
+            padding: 0;
+            margin: 0;
+            list-style: none;
+        }
+        .recent-item {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 20px;
+            border-bottom: 1px solid rgba(148, 163, 184, 0.08);
+            transition: background 0.15s;
+        }
+        .recent-item:last-child { border-bottom: none; }
+        .recent-item:hover {
+            background: rgba(56, 189, 248, 0.06);
+        }
+        .recent-item-main {
+            min-width: 0;
+        }
+        .recent-item-name {
+            font-size: 13px;
+            color: #e2e8f0;
+            margin-bottom: 2px;
+        }
+        .recent-item-meta {
+            font-size: 11px;
+            color: #64748b;
+        }
+        .recent-item-link {
+            flex-shrink: 0;
+            margin-left: 12px;
+            padding: 5px 12px;
+            font-size: 12px;
+            border-radius: 8px;
+            background: rgba(56, 189, 248, 0.15);
+            color: #38bdf8;
+            text-decoration: none;
+        }
+        .recent-item-link:hover {
+            background: rgba(56, 189, 248, 0.25);
+        }
+        .recent-empty {
+            padding: 32px 20px;
+            text-align: center;
+            font-size: 13px;
+            color: #64748b;
+        }
+        .tag-mini {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 6px;
+            font-size: 11px;
+            background: rgba(51, 65, 85, 0.8);
+            color: #94a3b8;
+            margin-right: 6px;
+        }
+    </style>
+</head>
+<body>
+<div class="app-layout">
+    <th:block th:replace="~{layout :: sidebar('dashboard')}"></th:block>
+    <main class="main-area">
+        <div class="container">
+            <div class="dashboard">
+                <header class="dashboard-hero">
+                    <h1 th:text="${title}">API 自动化测试 AI 平台</h1>
+                    <p th:text="${welcomeMessage}">从接口文档到测试代码，一站式 AI 驱动。</p>
+                </header>
+
+                <nav class="quick-actions">
+                    <a th:href="@{/projects}" class="quick-action">
+                        <div class="quick-action-icon">📁</div>
+                        <div class="quick-action-title">项目列表</div>
+                        <div class="quick-action-desc">创建与管理项目</div>
+                    </a>
+                    <a th:href="@{/apis}" class="quick-action">
+                        <div class="quick-action-icon">🔌</div>
+                        <div class="quick-action-title">接口列表</div>
+                        <div class="quick-action-desc">查看最近接口</div>
+                    </a>
+                    <a th:href="@{/testcases}" class="quick-action">
+                        <div class="quick-action-icon">📋</div>
+                        <div class="quick-action-title">用例列表</div>
+                        <div class="quick-action-desc">测试用例管理</div>
+                    </a>
+                    <a th:href="@{/testcodes}" class="quick-action">
+                        <div class="quick-action-icon">⚡</div>
+                        <div class="quick-action-title">自动化代码</div>
+                        <div class="quick-action-desc">生成与导出代码</div>
+                    </a>
+                    <a th:href="@{/settings}" class="quick-action">
+                        <div class="quick-action-icon">⚙</div>
+                        <div class="quick-action-title">系统配置</div>
+                        <div class="quick-action-desc">平台设置</div>
+                    </a>
+                </nav>
+
+                <div class="section-title">最近动态</div>
+                <div class="recent-grid">
+                    <div class="recent-card">
+                        <div class="recent-card-header">
+                            <h2>最近接口</h2>
+                            <a th:href="@{/apis}">查看全部</a>
+                        </div>
+                        <ul class="recent-list" th:if="${recentApis != null and !recentApis.isEmpty()}">
+                            <li class="recent-item" th:each="api : ${recentApis}">
+                                <div class="recent-item-main">
+                                    <div class="recent-item-name" th:text="${api.apiName}">-</div>
+                                    <div class="recent-item-meta">
+                                        <span class="tag-mini" th:text="${api.httpMethod}">GET</span>
+                                        <span th:text="${(projectIdToName != null and projectIdToName[api.projectId] != null) ? projectIdToName[api.projectId] : '—'}">—</span>
+                                    </div>
+                                </div>
+                                <a th:href="@{/projects/{pid}/apis/{apiId}/testcases(pid=${api.projectId}, apiId=${api.id})}" class="recent-item-link">详情</a>
+                            </li>
+                        </ul>
+                        <div class="recent-empty" th:if="${recentApis == null || recentApis.isEmpty()}">暂无接口，请先在项目中添加文档并提取接口。</div>
+                    </div>
+                    <div class="recent-card">
+                        <div class="recent-card-header">
+                            <h2>最近用例</h2>
+                            <a th:href="@{/testcases}">查看全部</a>
+                        </div>
+                        <ul class="recent-list" th:if="${recentCases != null and !recentCases.isEmpty()}">
+                            <li class="recent-item" th:each="tc : ${recentCases}">
+                                <div class="recent-item-main">
+                                    <div class="recent-item-name" th:text="${tc.caseName}">-</div>
+                                    <div class="recent-item-meta">
+                                        <span class="tag-mini" th:text="${tc.caseType}">normal</span>
+                                        <span th:text="${(apiIdToName != null and apiIdToName[tc.apiId] != null) ? apiIdToName[tc.apiId] : '—'}">—</span>
+                                    </div>
+                                </div>
+                                <a th:href="@{/projects/{pid}/apis/{aid}/testcases(pid=${tc.projectId}, aid=${tc.apiId})}" class="recent-item-link">进入</a>
+                            </li>
+                        </ul>
+                        <div class="recent-empty" th:if="${recentCases == null || recentCases.isEmpty()}">暂无用例，请在接口管理中生成或新建用例。</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+</body>
+</html>

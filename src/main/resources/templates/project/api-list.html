@@ -1,0 +1,297 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title th:text="'接口管理 - ' + ${projectName}">接口管理</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" th:href="@{/css/layout.css}">
+</head>
+<body th:data-project-id="${projectId}">
+<div class="app-layout">
+    <th:block th:replace="~{layout :: sidebar('projects')}"></th:block>
+    <main class="main-area">
+        <div class="container">
+            <div class="breadcrumb">
+                <a th:href="@{/}">工作台</a> &gt; <a th:href="@{/projects}">项目列表</a> &gt;
+                <a th:href="@{/projects/{id}(id=${projectId})}" th:text="${projectName}">项目</a> &gt; 接口管理
+            </div>
+            <div class="page-header">
+                <h1 th:text="'接口管理 · ' + ${projectName}">接口管理</h1>
+                <p class="page-desc">维护接口信息，为后续 AI 生成用例和测试代码提供基础。</p>
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-desc" style="flex:1;margin:0;">新建接口或从文档中提取后在此编辑；每个接口可生成用例与自动化代码。</div>
+                    <button class="btn btn-primary" onclick="toggleForm()">新建接口</button>
+                </div>
+                <div id="banner" class="banner"></div>
+                <div id="formBlock" class="form-block">
+                    <div class="form-row">
+                        <input id="apiName" placeholder="接口名称" style="flex:2;min-width:140px;">
+                        <input id="apiPath" placeholder="接口路径，如 /api/user/list" style="flex:2;min-width:180px;">
+                        <select id="httpMethod" style="flex:1;min-width:100px;">
+                            <option value="GET">GET</option>
+                            <option value="POST">POST</option>
+                            <option value="PUT">PUT</option>
+                            <option value="DELETE">DELETE</option>
+                        </select>
+                    </div>
+                    <input id="apiTags" placeholder="标签，逗号分隔（可选）">
+                    <textarea id="apiDescription" placeholder="接口描述（可选）"></textarea>
+                    <div class="form-group">
+                        <label>请求参数（JSON，入参结构）</label>
+                        <textarea id="apiRequestParams" placeholder='如 {"userId":{"type":"Long","required":true}}' style="min-height:100px;"></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>响应结构（JSON）</label>
+                        <textarea id="apiResponseSchema" placeholder='如 {"code":{"type":"Integer"},"data":{"type":"Object"}}' style="min-height:100px;"></textarea>
+                    </div>
+                    <div class="form-row" style="justify-content:flex-end;">
+                        <button type="button" class="btn btn-primary" onclick="submitApi()">保存接口</button>
+                    </div>
+                </div>
+                <table id="apiTable" class="data-table" style="display:none;">
+                    <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>名称</th>
+                        <th>方法</th>
+                        <th>路径</th>
+                        <th>状态</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                    </thead>
+                    <tbody id="apiTbody"></tbody>
+                </table>
+                <div class="empty-state" id="apiEmpty">暂无接口，点击「新建接口」或从文档管理中提取接口。</div>
+                <div id="paginationWrap" class="pagination-wrap" style="display:none;"></div>
+            </div>
+        </div>
+    </main>
+</div>
+
+<!-- 修改接口弹窗 -->
+<div id="editModal" class="modal-overlay" onclick="if(event.target===this) closeEditModal()">
+    <div class="modal-box" onclick="event.stopPropagation()">
+        <div class="modal-title">修改接口</div>
+        <div class="modal-body">
+            <div class="form-row">
+                <div style="flex:2;"><label>接口名称</label><input id="modalApiName" placeholder="接口名称"></div>
+                <div style="flex:2;"><label>接口路径</label><input id="modalApiPath" placeholder="/api/xxx"></div>
+                <div style="flex:1;"><label>HTTP 方法</label><select id="modalHttpMethod"><option value="GET">GET</option><option value="POST">POST</option><option value="PUT">PUT</option><option value="DELETE">DELETE</option></select></div>
+            </div>
+            <div><label>标签（逗号分隔）</label><input id="modalApiTags" placeholder="可选"></div>
+            <div><label>接口描述</label><textarea id="modalApiDescription" placeholder="可选" rows="2"></textarea></div>
+            <div><label>请求参数（JSON，入参结构）</label><textarea id="modalRequestParams" placeholder='如 {"userId":{"type":"Long","required":true}}' rows="4"></textarea></div>
+            <div><label>响应结构（JSON）</label><textarea id="modalResponseSchema" placeholder='如 {"code":{"type":"Integer"},"data":{}}' rows="4"></textarea></div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-cancel" onclick="closeEditModal()">取消</button>
+            <button type="button" class="btn btn-primary" onclick="submitEditModal()">保存</button>
+        </div>
+    </div>
+</div>
+
+<script th:inline="javascript">
+    let editingApiId = null;
+    function showBanner(ok, msg) {
+        const el = document.getElementById('banner');
+        el.classList.remove('ok', 'err');
+        el.classList.add(ok ? 'ok' : 'err');
+        el.textContent = msg;
+        el.style.display = 'block';
+        setTimeout(() => { el.style.display = 'none'; }, 2500);
+    }
+    function getProjectId() { return document.body.getAttribute('data-project-id'); }
+    function esc(s) { return (s || '').replace(/'/g, "\\'").replace(/\\/g, '\\\\'); }
+    const API_PAGE_SIZE = 10;
+    let apiCurrentPage = 1;
+
+    function renderApiPagination(total, page, totalPages) {
+        const wrap = document.getElementById('paginationWrap');
+        if (!wrap || totalPages <= 1) { if (wrap) wrap.style.display = 'none'; return; }
+        let html = '<span class="pagination-info">共 ' + total + ' 条，第 ' + page + ' / ' + totalPages + ' 页</span><nav class="pagination">';
+        if (page > 1) html += '<a href="javascript:void(0)" data-page="' + (page - 1) + '">上一页</a>';
+        for (let p = 1; p <= totalPages; p++) {
+            if (p === page) html += '<span class="page-current">' + p + '</span>';
+            else html += '<a href="javascript:void(0)" data-page="' + p + '">' + p + '</a>';
+        }
+        if (page < totalPages) html += '<a href="javascript:void(0)" data-page="' + (page + 1) + '">下一页</a>';
+        html += '</nav>';
+        wrap.innerHTML = html;
+        wrap.style.display = 'flex';
+        wrap.querySelectorAll('a[data-page]').forEach(a => { a.addEventListener('click', function() { apiCurrentPage = parseInt(this.getAttribute('data-page'), 10); loadApis(); }); });
+    }
+
+    async function loadApis(pageNum) {
+        if (typeof pageNum === 'number' && !isNaN(pageNum) && pageNum >= 1) apiCurrentPage = pageNum;
+        const projectId = getProjectId();
+        if (!projectId) return;
+        try {
+            const resp = await fetch(`/api/projects/${projectId}/apis?page=${apiCurrentPage}&size=${API_PAGE_SIZE}`);
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const records = data.records || [];
+            const total = data.total || 0;
+            const totalPages = total === 0 ? 1 : Math.ceil(total / API_PAGE_SIZE);
+            const countMap = data.testCaseCountByApiId || {};
+            const tbody = document.getElementById('apiTbody');
+            const table = document.getElementById('apiTable');
+            const empty = document.getElementById('apiEmpty');
+            const paginationWrap = document.getElementById('paginationWrap');
+            tbody.innerHTML = '';
+            if (records.length === 0) { table.style.display = 'none'; empty.style.display = 'block'; if (paginationWrap) paginationWrap.style.display = 'none'; return; }
+            records.forEach(a => {
+                const tr = document.createElement('tr');
+                const status = a.status || 'active';
+                const pid = getProjectId();
+                const disableOrEnable = status === 'disabled'
+                    ? `<button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:12px;color:#86efac;" onclick="enableApi(${a.id})">启用</button>`
+                    : `<button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="disableApi(${a.id})">禁用</button>`;
+                tr.innerHTML = `
+                    <td>${a.id}</td>
+                    <td>${a.apiName ?? ''}</td>
+                    <td><span class="tag">${a.httpMethod ?? ''}</span></td>
+                    <td>${a.apiPath ?? ''}</td>
+                    <td><span class="tag">${status}</span></td>
+                    <td>${a.createdAt ? (typeof a.createdAt === 'string' ? a.createdAt.replace('T', ' ').substring(0, 19) : a.createdAt) : ''}</td>
+                    <td>
+                        <button type="button" class="btn btn-primary" style="padding:4px 10px;font-size:12px;" onclick="generateCases(${a.id})">AI生成用例</button>
+                        <a class="link-btn" href="/projects/${pid}/apis/${a.id}/testcases">用例列表</a>
+                        <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:12px;" onclick="editApi(${a.id})">修改</button>
+                        ${disableOrEnable}
+                        <button type="button" class="btn btn-danger" style="padding:4px 10px;font-size:12px;" onclick="deleteApi(${a.id})">删除</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+            table.style.display = 'table';
+            empty.style.display = 'none';
+            renderApiPagination(total, apiCurrentPage, totalPages);
+        } catch (e) { console.error('加载接口异常', e); }
+    }
+    async function generateCases(apiId) {
+        const projectId = getProjectId();
+        if (!projectId) return;
+        try {
+            const resp = await fetch(`/api/projects/${projectId}/apis/${apiId}/generate-cases`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
+            if (!resp.ok) { const err = await resp.json().catch(() => ({})); showBanner(false, err.message || 'AI 生成用例失败'); return; }
+            const data = await resp.json();
+            showBanner(true, '已生成 ' + (data.caseCount || 0) + ' 条测试用例');
+            await loadApis();
+        } catch (e) { showBanner(false, 'AI 生成用例异常'); }
+    }
+    async function enableApi(id) {
+        const projectId = getProjectId();
+        try {
+            const resp = await fetch(`/api/projects/${projectId}/apis/${id}/enable`, { method: 'PATCH' });
+            if (!resp.ok) { showBanner(false, '启用接口失败'); return; }
+            await loadApis();
+            showBanner(true, '接口已启用');
+        } catch (e) { showBanner(false, '启用接口异常'); }
+    }
+    function collectApiForm() {
+        const apiName = document.getElementById('apiName').value.trim();
+        const apiPath = document.getElementById('apiPath').value.trim();
+        const httpMethod = document.getElementById('httpMethod').value;
+        const description = document.getElementById('apiDescription').value.trim();
+        const tags = document.getElementById('apiTags').value.trim();
+        const requestParams = document.getElementById('apiRequestParams').value.trim();
+        const responseSchema = document.getElementById('apiResponseSchema').value.trim();
+        if (!apiName || !apiPath) { showBanner(false, '接口名称和路径不能为空'); return null; }
+        return { projectId: getProjectId(), apiName, apiPath, httpMethod, description, tags, requestParams: requestParams || null, responseSchema: responseSchema || null };
+    }
+    function clearApiForm() {
+        document.getElementById('apiName').value = '';
+        document.getElementById('apiPath').value = '';
+        document.getElementById('httpMethod').value = 'GET';
+        document.getElementById('apiDescription').value = '';
+        document.getElementById('apiTags').value = '';
+        document.getElementById('apiRequestParams').value = '';
+        document.getElementById('apiResponseSchema').value = '';
+    }
+    async function submitApi() {
+        const data = collectApiForm();
+        if (!data) return;
+        const { projectId, apiName, apiPath, httpMethod, description, tags, requestParams, responseSchema } = data;
+        const body = { apiName, apiPath, httpMethod, description, tags, requestParams, responseSchema };
+        try {
+            const resp = await fetch(`/api/projects/${projectId}/apis`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            if (!resp.ok) { showBanner(false, '创建接口失败'); return; }
+            clearApiForm();
+            document.getElementById('formBlock').classList.remove('show');
+            await loadApis(1);
+            showBanner(true, '创建接口成功');
+        } catch (e) { showBanner(false, '提交接口异常'); }
+    }
+    async function editApi(id) {
+        const projectId = getProjectId();
+        try {
+            const resp = await fetch(`/api/projects/${projectId}/apis/${id}`);
+            if (!resp.ok) { showBanner(false, '加载接口详情失败'); return; }
+            const a = await resp.json();
+            document.getElementById('modalApiName').value = a.apiName || '';
+            document.getElementById('modalApiPath').value = a.apiPath || '';
+            document.getElementById('modalHttpMethod').value = a.httpMethod || 'GET';
+            document.getElementById('modalApiDescription').value = a.description || '';
+            document.getElementById('modalApiTags').value = a.tags || '';
+            document.getElementById('modalRequestParams').value = a.requestParams || '';
+            document.getElementById('modalResponseSchema').value = a.responseSchema || '';
+            editingApiId = id;
+            document.getElementById('editModal').classList.add('show');
+        } catch (e) { showBanner(false, '加载接口详情异常'); }
+    }
+    function closeEditModal() {
+        document.getElementById('editModal').classList.remove('show');
+        editingApiId = null;
+    }
+    async function submitEditModal() {
+        if (!editingApiId) return;
+        const apiName = document.getElementById('modalApiName').value.trim();
+        const apiPath = document.getElementById('modalApiPath').value.trim();
+        if (!apiName || !apiPath) { showBanner(false, '接口名称和路径不能为空'); return; }
+        const projectId = getProjectId();
+        const body = {
+            apiName,
+            apiPath,
+            httpMethod: document.getElementById('modalHttpMethod').value,
+            description: document.getElementById('modalApiDescription').value.trim() || null,
+            tags: document.getElementById('modalApiTags').value.trim() || null,
+            requestParams: document.getElementById('modalRequestParams').value.trim() || null,
+            responseSchema: document.getElementById('modalResponseSchema').value.trim() || null
+        };
+        try {
+            const resp = await fetch(`/api/projects/${projectId}/apis/${editingApiId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+            if (!resp.ok) { showBanner(false, '更新接口失败'); return; }
+            closeEditModal();
+            await loadApis();
+            showBanner(true, '接口已更新');
+        } catch (e) { showBanner(false, '更新接口异常'); }
+    }
+    async function disableApi(id) {
+        const projectId = getProjectId();
+        try {
+            const resp = await fetch(`/api/projects/${projectId}/apis/${id}`, { method: 'DELETE' });
+            if (!resp.ok) { showBanner(false, '禁用接口失败'); return; }
+            await loadApis();
+            showBanner(true, '接口已禁用');
+        } catch (e) { showBanner(false, '禁用接口异常'); }
+    }
+    async function deleteApi(id) {
+        if (!confirm('确定要删除该接口吗？')) return;
+        const projectId = getProjectId();
+        try {
+            const resp = await fetch(`/api/projects/${projectId}/apis/${id}`, { method: 'DELETE' });
+            if (!resp.ok) { showBanner(false, '删除接口失败'); return; }
+            await loadApis();
+            showBanner(true, '接口已删除');
+        } catch (e) { showBanner(false, '删除接口异常'); }
+    }
+    function toggleForm() {
+        document.getElementById('formBlock').classList.toggle('show');
+    }
+    document.addEventListener('DOMContentLoaded', function() { loadApis(); });
+</script>
+</body>
+</html>

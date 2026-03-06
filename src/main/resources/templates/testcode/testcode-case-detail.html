@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title th:text="${testCode != null ? '代码详情 · ' + (case != null ? case.caseName : '') : '代码详情 · 未生成'}">代码详情</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" th:href="@{/css/layout.css}">
+    <style>
+        .code-item { margin-top: 12px; padding: 12px 14px; border-radius: 12px; background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(55, 65, 81, 0.9); }
+        .code-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 12px; color: var(--text-secondary); }
+        .code-item pre { margin: 4px 0 0; padding: 10px 12px; border-radius: 8px; background: #020617; font-size: 12px; overflow-x: auto; }
+    </style>
+</head>
+<body th:data-case-id="${case.id}" th:data-api-id="${apiId}" th:data-project-id="${projectId}">
+<div class="app-layout">
+    <th:block th:replace="~{layout :: sidebar('testcases')}"></th:block>
+    <main class="main-area">
+        <div class="container">
+            <div class="breadcrumb">
+                <a th:href="@{/}">工作台</a> &gt; <a th:href="@{/testcases}">用例列表</a> &gt;
+                <a th:href="@{/testcases/detail/{id}(id=${case.id})}" th:text="${case.caseName}">用例</a> &gt; 代码详情
+            </div>
+            <div class="page-header">
+                <h1 th:text="${testCode != null ? '代码详情 · ' + case.caseName : '代码详情 · 未生成'}">代码详情</h1>
+            </div>
+            <div id="banner" class="banner"></div>
+            <div class="card">
+                <!-- 已生成代码：展示内容与操作 -->
+                <th:block th:if="${testCode != null}">
+                    <div class="code-item">
+                        <div class="code-header">
+                            <div>
+                                <span class="tag" th:text="${testCode.language != null ? testCode.language : 'java'}">java</span>
+                                <span class="tag" th:text="${testCode.framework != null ? testCode.framework : 'junit5'}">junit5</span>
+                                <span class="tag" th:text="${testCode.className}">-</span>
+                            </div>
+                            <div>
+                                <button type="button" class="btn btn-primary" style="padding:4px 10px;font-size:12px;margin-right:6px;"
+                                    th:data-code-id="${testCode.id}" onclick="saveCode(this.getAttribute('data-code-id'))">保存到工程</button>
+                                <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:12px;"
+                                    th:data-code-id="${testCode.id}" onclick="downloadCode(this.getAttribute('data-code-id'))" title="下载为 .java 文件">下载 .java</button>
+                            </div>
+                        </div>
+                        <pre th:text="${testCode.codeContent}">-</pre>
+                    </div>
+                </th:block>
+                <!-- 未生成代码：提示与生成按钮 -->
+                <th:block th:if="${testCode == null}">
+                    <div class="empty-state">
+                        <p>该用例尚未生成自动化代码。</p>
+                        <p>点击下方按钮为该用例生成 JUnit 5 风格的接口测试代码。</p>
+                        <button type="button" class="btn btn-primary" id="btnGenCode">AI生成测试用例自动化代码</button>
+                    </div>
+                </th:block>
+            </div>
+        </div>
+    </main>
+</div>
+<script th:inline="javascript">
+    function getCaseId() { return document.body.getAttribute('data-case-id'); }
+    function getApiId() { return document.body.getAttribute('data-api-id'); }
+    function getProjectId() { return document.body.getAttribute('data-project-id'); }
+    function showBanner(ok, msg) {
+        var el = document.getElementById('banner');
+        el.classList.remove('ok', 'err');
+        el.classList.add(ok ? 'ok' : 'err');
+        el.textContent = msg;
+        el.style.display = 'block';
+        setTimeout(function() { el.style.display = 'none'; }, 3000);
+    }
+    function saveCode(codeId) {
+        var apiId = getApiId();
+        fetch('/api/apis/' + apiId + '/testcodes/' + codeId + '/save', { method: 'POST' })
+            .then(function(r) {
+                if (r.ok) showBanner(true, '测试代码已保存到本地工程');
+                else showBanner(false, '保存失败，状态码：' + r.status);
+            })
+            .catch(function(e) { showBanner(false, '保存异常'); });
+    }
+    function downloadCode(codeId) {
+        var apiId = getApiId();
+        window.location.href = '/api/apis/' + apiId + '/testcodes/' + codeId + '/download';
+    }
+    var btnGen = document.getElementById('btnGenCode');
+    if (btnGen) {
+        btnGen.addEventListener('click', async function() {
+            var apiId = getApiId();
+            var caseId = getCaseId();
+            try {
+                var resp = await fetch('/api/apis/' + apiId + '/testcodes/generate-case/' + caseId, { method: 'POST' });
+                if (!resp.ok) {
+                    var err = await resp.json().catch(function() { return {}; });
+                    showBanner(false, err.message || '生成测试代码失败');
+                    return;
+                }
+                showBanner(true, '已为该用例生成测试代码，页面即将刷新');
+                setTimeout(function() { window.location.reload(); }, 1200);
+            } catch (e) {
+                showBanner(false, '生成测试代码异常，请查看控制台');
+            }
+        });
+    }
+</script>
+</body>
+</html>

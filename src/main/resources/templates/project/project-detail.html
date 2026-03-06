@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title th:text="${projectName} + ' - 项目详情'">项目详情</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" th:href="@{/css/layout.css}">
+</head>
+<body>
+<div class="app-layout">
+    <th:block th:replace="~{layout :: sidebar('projects')}"></th:block>
+    <main class="main-area">
+        <div class="container">
+            <div class="breadcrumb">
+                <a th:href="@{/}">工作台</a> &gt; <a th:href="@{/projects}">项目列表</a> &gt; <span th:text="${projectName}">项目</span>
+            </div>
+            <div class="page-header">
+                <h1 th:text="${projectName}">项目详情</h1>
+                <p class="page-desc">在此项目中管理接口文档、接口列表与测试用例及代码生成。</p>
+            </div>
+            <div class="card">
+                <div class="card-title">快捷入口</div>
+                <p class="card-desc" style="margin-bottom:16px;">上传或粘贴文档并提取接口，随后在接口管理中维护用例与生成自动化代码。</p>
+                <div class="entry-row">
+                    <a th:href="@{/projects/{id}/documents(id=${projectId})}">文档管理</a>
+                    <a th:href="@{/projects/{id}/apis(id=${projectId})}">接口管理</a>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+</body>
+</html>

@@ -1,0 +1,127 @@
+<!DOCTYPE html>
+<!-- 项目列表：页面由 ProjectController 渲染；列表数据由 JS 请求 GET /api/projects?page=&size=10 拉取并分页 -->
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>项目列表 - API Test AI</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" th:href="@{/css/layout.css}">
+</head>
+<body>
+<div class="app-layout">
+    <th:block th:replace="~{layout :: sidebar('projects')}"></th:block>
+    <main class="main-area">
+        <div class="container">
+            <div class="page-header">
+                <h1>项目列表</h1>
+                <p class="page-desc">管理你的接口自动化测试项目，点击「进入」进入项目详情。</p>
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-desc" style="flex:1;margin:0;">创建项目后可在项目内进行文档管理、接口管理与用例生成。</div>
+                    <button class="btn btn-primary" onclick="toggleCreateForm()">新建项目</button>
+                </div>
+                <form id="createForm" class="form-block" onsubmit="return false;">
+                    <div class="form-row">
+                        <input type="text" id="projectName" placeholder="项目名称" required style="flex:2;min-width:160px;">
+                        <input type="text" id="projectDescription" placeholder="项目描述" style="flex:2;min-width:200px;">
+                        <button type="button" class="btn btn-primary" onclick="createProject()">保存</button>
+                    </div>
+                </form>
+                <table id="projectTable" class="data-table" style="display:none;">
+                    <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>项目名称</th>
+                        <th>描述</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                    </thead>
+                    <tbody id="projectTbody"></tbody>
+                </table>
+                <div class="empty-state" id="emptyHint">还没有任何项目，点击「新建项目」开始吧。</div>
+                <div id="paginationWrap" class="pagination-wrap" style="display:none;"></div>
+            </div>
+        </div>
+    </main>
+</div>
+<script th:inline="javascript">
+    const PAGE_SIZE = 10;
+    let currentPage = 1;
+
+    function renderPagination(total, page, totalPages) {
+        const wrap = document.getElementById('paginationWrap');
+        if (!wrap || totalPages <= 1) { if (wrap) wrap.style.display = 'none'; return; }
+        let html = '<span class="pagination-info">共 ' + total + ' 条，第 ' + page + ' / ' + totalPages + ' 页</span><nav class="pagination">';
+        if (page > 1) html += '<a href="javascript:void(0)" data-page="' + (page - 1) + '">上一页</a>';
+        for (let p = 1; p <= totalPages; p++) {
+            if (p === page) html += '<span class="page-current">' + p + '</span>';
+            else html += '<a href="javascript:void(0)" data-page="' + p + '">' + p + '</a>';
+        }
+        if (page < totalPages) html += '<a href="javascript:void(0)" data-page="' + (page + 1) + '">下一页</a>';
+        html += '</nav>';
+        wrap.innerHTML = html;
+        wrap.style.display = 'flex';
+        wrap.querySelectorAll('a[data-page]').forEach(a => { a.addEventListener('click', function() { goToPage(parseInt(this.getAttribute('data-page'), 10)); }); });
+    }
+
+    function goToPage(page) { currentPage = page; loadProjects(); }
+
+    async function loadProjects(pageNum) {
+        if (typeof pageNum === 'number' && !isNaN(pageNum) && pageNum >= 1) currentPage = pageNum;
+        try {
+            const resp = await fetch('/api/projects?page=' + currentPage + '&size=' + PAGE_SIZE);
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const records = data.records || [];
+            const total = data.total || 0;
+            const totalPages = total === 0 ? 1 : Math.ceil(total / PAGE_SIZE);
+            const tbody = document.getElementById('projectTbody');
+            const table = document.getElementById('projectTable');
+            const emptyHint = document.getElementById('emptyHint');
+            if (!tbody || !table || !emptyHint) return;
+            tbody.innerHTML = '';
+            if (records.length === 0) {
+                table.style.display = 'none';
+                emptyHint.style.display = 'block';
+                document.getElementById('paginationWrap').style.display = 'none';
+                return;
+            }
+            records.forEach(p => {
+                const tr = document.createElement('tr');
+                const created = p.createdAt ? (typeof p.createdAt === 'string' ? p.createdAt.replace('T', ' ').substring(0, 19) : p.createdAt) : '';
+                tr.innerHTML = `
+                    <td>${p.id}</td>
+                    <td>${p.name ?? ''}</td>
+                    <td>${p.description ?? ''}</td>
+                    <td>${created}</td>
+                    <td><a class="link-btn" href="/projects/${p.id}">进入</a></td>
+                `;
+                tbody.appendChild(tr);
+            });
+            table.style.display = 'table';
+            emptyHint.style.display = 'none';
+            renderPagination(total, currentPage, totalPages);
+        } catch (e) { console.error('加载项目异常', e); }
+    }
+    async function createProject() {
+        const nameInput = document.getElementById('projectName');
+        const descInput = document.getElementById('projectDescription');
+        const name = nameInput.value.trim();
+        const description = descInput.value.trim();
+        if (!name) { alert('项目名称不能为空'); return; }
+        try {
+            const resp = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, description }) });
+            if (!resp.ok) { alert('创建项目失败，状态码：' + resp.status); return; }
+            nameInput.value = ''; descInput.value = '';
+            await loadProjects(1);
+        } catch (e) { console.error('创建项目异常', e); alert('创建项目异常'); }
+    }
+    function toggleCreateForm() {
+        document.getElementById('createForm').classList.toggle('show');
+    }
+    document.addEventListener('DOMContentLoaded', function() { loadProjects(); });
+</script>
+</body>
+</html>

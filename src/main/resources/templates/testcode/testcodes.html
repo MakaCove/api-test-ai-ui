@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title>用例自动化代码列表 - API Test AI</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" th:href="@{/css/layout.css}">
+</head>
+<body>
+<div class="app-layout">
+    <th:block th:replace="~{layout :: sidebar('testcodes')}"></th:block>
+    <main class="main-area">
+        <div class="container">
+            <div class="breadcrumb">
+                <a th:href="@{/}">工作台</a> &gt; 用例自动化代码列表
+            </div>
+            <div class="page-header">
+                <h1>用例自动化代码列表</h1>
+                <p class="page-desc">最近生成的测试代码（一条用例一条），点击「详情」进入该接口的测试代码页查看、下载或保存到工程。</p>
+            </div>
+            <div class="card">
+                <table th:if="${recentCodes != null and !recentCodes.isEmpty()}" class="data-table">
+                    <thead>
+                        <tr><th>类名</th><th>语言</th><th>框架</th><th>关联用例</th><th>所属接口</th><th>所属项目</th><th>状态</th><th>创建时间</th><th>操作</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr th:each="c : ${recentCodes}">
+                            <td th:text="${c.className}">-</td>
+                            <td><span class="tag" th:text="${c.language}">java</span></td>
+                            <td><span class="tag" th:text="${c.framework}">junit5</span></td>
+                            <td th:text="${c.testCaseId != null} ? '用例#' + c.testCaseId : '—'">—</td>
+                            <td th:text="${apiIdToName != null && apiIdToName.containsKey(c.apiId) ? apiIdToName.get(c.apiId) : '—'}">—</td>
+                            <td th:text="${projectIdToName != null && projectIdToName.containsKey(c.projectId) ? projectIdToName.get(c.projectId) : '—'}">—</td>
+                            <td><span class="tag" th:text="${c.status}">generated</span></td>
+                            <td th:text="${c.createdAt != null ? #temporals.format(c.createdAt, 'yyyy-MM-dd HH:mm:ss') : '—'}">-</td>
+                            <td>
+                                <a th:href="@{/projects/{pid}/apis/{aid}/testcodes(pid=${c.projectId}, aid=${c.apiId}, from='testcodes')}" class="link-btn">详情</a>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+                <div th:if="${recentCodes == null || recentCodes.isEmpty()}" class="empty-state">暂无测试代码，请先在接口管理或用例列表中为用例生成自动化代码。</div>
+                <div th:if="${recentCodes != null and !recentCodes.isEmpty() and totalPages > 1}" class="pagination-wrap">
+                    <span class="pagination-info">共 <span th:text="${totalCodes}">0</span> 条，第 <span th:text="${currentPage}">1</span> / <span th:text="${totalPages}">1</span> 页</span>
+                    <nav class="pagination">
+                        <a th:if="${currentPage > 1}" th:href="@{/testcodes(page=${currentPage - 1})}" rel="prev">上一页</a>
+                        <th:block th:each="p : ${#numbers.sequence(1, totalPages)}">
+                            <a th:if="${p != currentPage}" th:href="@{/testcodes(page=${p})}" th:text="${p}">1</a>
+                            <span th:if="${p == currentPage}" class="page-current" th:text="${p}">1</span>
+                        </th:block>
+                        <a th:if="${currentPage < totalPages}" th:href="@{/testcodes(page=${currentPage + 1})}" rel="next">下一页</a>
+                    </nav>
+                </div>
+            </div>
+        </div>
+    </main>
+</div>
+</body>
+</html>

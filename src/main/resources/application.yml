@@ -1,0 +1,44 @@
+server:
+  port: 8080
+
+# 日志：输出到控制台 + 项目目录下 logs 文件夹
+logging:
+  file:
+    name: logs/application.log
+  level:
+    root: INFO
+    org.example: DEBUG
+    org.springframework.web: INFO
+    org.springframework.security: INFO
+
+spring:
+  application:
+    name: api-test-ai-ui
+
+  datasource:
+    url: jdbc:mysql://localhost:3306/api_test_ai_ui?useUnicode=true&characterEncoding=utf8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: admin123
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+  thymeleaf:
+    cache: false
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+ai:
+  endpoint: https://api.openai.com/v1
+  api-key: YOUR_API_KEY
+  model: gpt-4.1
+  temperature: 0.3
+  max-tokens: 4096
+

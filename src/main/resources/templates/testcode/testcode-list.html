@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title th:text="'测试代码 · ' + ${apiName}">测试代码</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" th:href="@{/css/layout.css}">
+    <style>
+        .breadcrumb { font-size: 13px; color: #94a3b8; margin-bottom: 16px; }
+        .breadcrumb a { color: #94a3b8; text-decoration: none; }
+        .breadcrumb a:hover { color: #38bdf8; }
+        h1 { font-size: 22px; margin: 0 0 18px; }
+        .card { border-radius: 18px; padding: 18px 18px 20px; background: rgba(15, 23, 42, 0.96); border: 1px solid rgba(148, 163, 184, 0.4); }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 14px; }
+        .btn-primary { border-radius: 999px; border: none; padding: 6px 14px; font-size: 13px; cursor: pointer; background: linear-gradient(120deg, #38bdf8, #22c55e); color: #0f172a; }
+        .btn-secondary-code { border-radius: 999px; padding: 6px 14px; font-size: 13px; cursor: pointer; background: transparent; color: #94a3b8; border: 1px solid #64748b; }
+        .btn-secondary-code:hover { color: #e2e8f0; border-color: #94a3b8; background: rgba(100, 116, 139, 0.2); }
+        .meta { font-size: 12px; color: #9ca3af; margin-bottom: 8px; }
+        .code-item { margin-top: 12px; padding: 10px 10px 12px; border-radius: 12px; background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(55, 65, 81, 0.9); }
+        .code-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; font-size: 12px; color: #9ca3af; }
+        .tag { display: inline-block; padding: 2px 8px; border-radius: 999px; border: 1px solid rgba(148, 163, 184, 0.6); font-size: 11px; color: #9ca3af; margin-right: 4px; }
+        pre { margin: 4px 0 0; padding: 8px 10px; border-radius: 8px; background: #020617; font-size: 12px; overflow-x: auto; }
+        .empty {
+            font-size: 13px;
+            color: #9ca3af;
+            padding-top: 4px;
+        }
+
+        .banner {
+            margin-bottom: 10px;
+            padding: 6px 10px;
+            border-radius: 10px;
+            font-size: 12px;
+            display: none;
+        }
+
+        .banner.ok {
+            background: rgba(22, 163, 74, 0.15);
+            border: 1px solid rgba(34, 197, 94, 0.6);
+            color: #bbf7d0;
+        }
+
+        .banner.err {
+            background: rgba(239, 68, 68, 0.15);
+            border: 1px solid rgba(248, 113, 113, 0.7);
+            color: #fecaca;
+        }
+    </style>
+</head>
+<body th:data-api-id="${apiId}">
+<div class="app-layout">
+    <th:block th:replace="~{layout :: sidebar(activeKey=${fromTestcodes != null and fromTestcodes ? 'testcodes' : 'projects'})}"></th:block>
+    <main class="main-area">
+        <div class="container">
+            <!-- 从用例自动化代码列表进入：工作台 > 用例自动化代码列表 > 接口名 · 测试代码 -->
+            <div class="breadcrumb" th:if="${fromTestcodes != null and fromTestcodes}">
+                <a th:href="@{/}">工作台</a> &gt; <a th:href="@{/testcodes}">用例自动化代码列表</a> &gt; <span th:text="${apiName + ' · 测试代码'}">接口 · 测试代码</span>
+            </div>
+            <!-- 从项目/接口管理进入：工作台 > 项目列表 > 项目名 > 接口管理 > 接口名 · 测试代码 -->
+            <div class="breadcrumb" th:if="${fromTestcodes == null or !fromTestcodes}">
+                <a th:href="@{/}">工作台</a> &gt; <a th:href="@{/projects}">项目列表</a> &gt;
+                <a th:href="@{/projects/{id}(id=${projectId})}" th:text="${projectName}">项目</a> &gt;
+                <a th:href="@{/projects/{pid}/apis(pid=${projectId})}">接口管理</a> &gt; <span th:text="${apiName}">接口</span> · 测试代码
+            </div>
+            <h1 th:text="'测试代码 · ' + ${apiName}">测试代码</h1>
+            <div class="card">
+            <div class="card-header">
+                <div class="meta">
+                    基于当前接口及其测试用例，生成 JUnit 5 风格的 Java 测试代码。
+                </div>
+                <button class="btn-primary" onclick="generateCode()">生成测试代码</button>
+            </div>
+
+            <div id="banner" class="banner"></div>
+
+            <div id="codeList"></div>
+            <div class="empty" id="codeEmpty">暂无测试代码，点击右上角「生成测试代码」开始。</div>
+            <div id="paginationWrap" class="pagination-wrap" style="display:none;"></div>
+            </div>
+        </div>
+    </main>
+</div>
+<script>
+    const CODE_PAGE_SIZE = 10;
+    let codeCurrentPage = 1;
+
+    function renderCodePagination(total, page, totalPages) {
+        const wrap = document.getElementById('paginationWrap');
+        if (!wrap || totalPages <= 1) { if (wrap) wrap.style.display = 'none'; return; }
+        let html = '<span class="pagination-info">共 ' + total + ' 条，第 ' + page + ' / ' + totalPages + ' 页</span><nav class="pagination">';
+        if (page > 1) html += '<a href="javascript:void(0)" data-page="' + (page - 1) + '">上一页</a>';
+        for (let p = 1; p <= totalPages; p++) {
+            if (p === page) html += '<span class="page-current">' + p + '</span>';
+            else html += '<a href="javascript:void(0)" data-page="' + p + '">' + p + '</a>';
+        }
+        if (page < totalPages) html += '<a href="javascript:void(0)" data-page="' + (page + 1) + '">下一页</a>';
+        html += '</nav>';
+        wrap.innerHTML = html;
+        wrap.style.display = 'flex';
+        wrap.querySelectorAll('a[data-page]').forEach(a => { a.addEventListener('click', function() { codeCurrentPage = parseInt(this.getAttribute('data-page'), 10); loadCodes(); }); });
+    }
+
+    function getApiId() {
+        return document.body.getAttribute('data-api-id');
+    }
+
+    function showBanner(ok, msg) {
+        const el = document.getElementById('banner');
+        el.classList.remove('ok', 'err');
+        el.classList.add(ok ? 'ok' : 'err');
+        el.textContent = msg;
+        el.style.display = 'block';
+        setTimeout(() => {
+            el.style.display = 'none';
+        }, 2500);
+    }
+
+    async function loadCodes(pageNum) {
+        if (typeof pageNum === 'number' && !isNaN(pageNum) && pageNum >= 1) codeCurrentPage = pageNum;
+        const apiId = getApiId();
+        if (!apiId) return;
+        try {
+            const resp = await fetch(`/api/apis/${apiId}/testcodes?page=${codeCurrentPage}&size=${CODE_PAGE_SIZE}`);
+            if (!resp.ok) {
+                console.error('加载测试代码失败', resp.status);
+                return;
+            }
+            const data = await resp.json();
+            const records = data.records || [];
+            const total = data.total || 0;
+            const totalPages = total === 0 ? 1 : Math.ceil(total / CODE_PAGE_SIZE);
+            const list = document.getElementById('codeList');
+            const empty = document.getElementById('codeEmpty');
+            const paginationWrap = document.getElementById('paginationWrap');
+
+            list.innerHTML = '';
+            if (records.length === 0) {
+                empty.style.display = 'block';
+                if (paginationWrap) paginationWrap.style.display = 'none';
+                return;
+            }
+            empty.style.display = 'none';
+
+            records.forEach(c => {
+                const div = document.createElement('div');
+                const status = c.status || 'generated';
+                const when = c.createdAt ? (typeof c.createdAt === 'string' ? c.createdAt.replace('T', ' ').substring(0, 19) : c.createdAt) : '';
+                const caseLabel = c.testCaseId != null ? '用例#' + c.testCaseId : '';
+                div.className = 'code-item';
+                div.innerHTML = `
+                    <div class="code-header">
+                        <div>
+                            ${caseLabel ? '<span class="tag">' + caseLabel + '</span>' : ''}
+                            <span class="tag">${c.language ?? 'java'}</span>
+                            <span class="tag">${c.framework ?? 'junit5'}</span>
+                            <span class="tag">${status}</span>
+                        </div>
+                        <div>
+                            <span style="margin-right:8px;">${when}</span>
+                            <button type="button" class="btn-primary" style="padding:4px 10px;font-size:12px;margin-right:6px;"
+                                onclick="saveCode(${c.id})">保存到工程</button>
+                            <button type="button" class="btn-secondary-code" style="padding:4px 10px;font-size:12px;"
+                                onclick="downloadCode(${c.id})" title="下载为 .java 文件">下载 .java</button>
+                        </div>
+                    </div>
+                    <pre>${(c.codeContent ?? '').replace(/</g, '&lt;').replace(/>/g, '&gt;')}</pre>
+                `;
+                list.appendChild(div);
+            });
+            renderCodePagination(total, codeCurrentPage, totalPages);
+        } catch (e) {
+            console.error('加载测试代码异常', e);
+        }
+    }
+
+    async function generateCode() {
+        const apiId = getApiId();
+        try {
+            const resp = await fetch(`/api/apis/${apiId}/testcodes`, {
+                method: 'POST'
+            });
+            if (!resp.ok) {
+                showBanner(false, '生成测试代码失败，状态码：' + resp.status);
+                return;
+            }
+            const data = await resp.json().catch(() => ({}));
+            await loadCodes(1);
+            const count = data.count != null ? data.count : 0;
+            showBanner(true, count > 0 ? '成功生成 ' + count + ' 条测试代码（一条用例一条）' : '生成测试代码成功');
+        } catch (e) {
+            console.error('生成测试代码异常', e);
+            showBanner(false, '生成测试代码异常，请查看控制台');
+        }
+    }
+
+    async function saveCode(id) {
+        const apiId = getApiId();
+        try {
+            const resp = await fetch(`/api/apis/${apiId}/testcodes/${id}/save`, {
+                method: 'POST'
+            });
+            if (!resp.ok) {
+                showBanner(false, '保存测试代码失败，状态码：' + resp.status);
+                return;
+            }
+            await loadCodes(codeCurrentPage);
+            showBanner(true, '测试代码已保存到本地工程');
+        } catch (e) {
+            console.error('保存测试代码异常', e);
+            showBanner(false, '保存测试代码异常，请查看控制台');
+        }
+    }
+
+    function downloadCode(id) {
+        const apiId = getApiId();
+        window.location.href = `/api/apis/${apiId}/testcodes/${id}/download`;
+    }
+
+    document.addEventListener('DOMContentLoaded', function() { loadCodes(); });
+</script>
+</body>
+</html>
+

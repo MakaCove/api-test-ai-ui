@@ -1,0 +1,32 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>API Test AI</title>
+    <link rel="stylesheet" th:href="@{/css/layout.css}">
+</head>
+<body>
+<!--
+  公共布局：仅提供侧栏片段 sidebar(activeKey)。
+  各页通过 th:replace="~{layout :: sidebar('xxx')}" 引入，activeKey 用于高亮当前菜单（dashboard/projects/apis/testcases/testcodes/settings）。
+  主内容由各页自己在模板内写，不通过片段传参。
+-->
+<aside th:fragment="sidebar(activeKey)" class="sidebar">
+    <div class="sidebar-body">
+        <div class="logo"><a th:href="@{/}">API TEST · AI</a></div>
+        <nav>
+            <a th:href="@{/}" th:classappend="${activeKey == 'dashboard'} ? 'active' : ''">工作台</a>
+            <a th:href="@{/projects}" th:classappend="${activeKey == 'projects'} ? 'active' : ''">项目列表</a>
+            <a th:href="@{/apis}" th:classappend="${activeKey == 'apis'} ? 'active' : ''">接口列表</a>
+            <a th:href="@{/testcases}" th:classappend="${activeKey == 'testcases'} ? 'active' : ''">用例列表</a>
+            <a th:href="@{/testcodes}" th:classappend="${activeKey == 'testcodes'} ? 'active' : ''">用例自动化代码列表</a>
+            <a th:href="@{/settings}" th:classappend="${activeKey == 'settings'} ? 'active' : ''">系统配置</a>
+        </nav>
+    </div>
+    <div class="sidebar-footer">
+        <a th:href="@{/logout}">退出登录</a>
+    </div>
+</aside>
+</body>
+</html>

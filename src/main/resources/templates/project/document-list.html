@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="zh-CN" xmlns:th="http://www.thymeleaf.org">
+<head>
+    <meta charset="UTF-8">
+    <title th:text="'文档管理 - ' + ${projectName}">文档管理</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <link rel="stylesheet" th:href="@{/css/layout.css}">
+</head>
+<body th:data-project-id="${projectId}">
+<div class="app-layout">
+    <th:block th:replace="~{layout :: sidebar('projects')}"></th:block>
+    <main class="main-area">
+        <div class="container">
+            <div class="breadcrumb">
+                <a th:href="@{/}">工作台</a> &gt; <a th:href="@{/projects}">项目列表</a> &gt;
+                <a th:href="@{/projects/{id}(id=${projectId})}" th:text="${projectName}">项目</a> &gt; 文档管理
+            </div>
+            <div class="page-header">
+                <h1 th:text="'文档管理 · ' + ${projectName}">文档管理</h1>
+                <p class="page-desc">上传或粘贴后自动生成标准化文档，状态为「已标准化」后点击「AI提取接口信息」写入接口表。</p>
+            </div>
+            <div class="card">
+                <div class="card-header">
+                    <div class="card-desc" style="flex:1;margin:0;">支持 .txt / .doc / .docx / .md，粘贴内容保存后触发 AI 标准化。</div>
+                    <div class="action-bar">
+                        <button class="btn btn-primary" onclick="toggleForm()">粘贴文档</button>
+                        <button class="btn btn-secondary" onclick="document.getElementById('fileInput').click()">上传文件</button>
+                        <input type="file" id="fileInput" accept=".txt,.doc,.docx,.md" style="display:none;">
+                    </div>
+                </div>
+                <div id="banner" class="banner"></div>
+                <div id="formBlock" class="form-block">
+                    <div class="form-row">
+                        <input id="docTitle" placeholder="文档标题（可选）" style="flex:2;min-width:160px;">
+                        <select id="docType" style="flex:1;min-width:140px;">
+                            <option value="markdown">Markdown</option>
+                            <option value="word">Word（粘贴内容）</option>
+                            <option value="text">纯文本</option>
+                            <option value="swagger">Swagger JSON</option>
+                            <option value="openapi">OpenAPI</option>
+                        </select>
+                    </div>
+                    <textarea id="docContent" placeholder="在这里粘贴接口文档内容" style="min-height:120px;"></textarea>
+                    <div class="form-row" style="justify-content:flex-end;">
+                        <button type="button" class="btn btn-primary" onclick="createDocument()">保存文档</button>
+                    </div>
+                </div>
+                <table id="docTable" class="data-table" style="display:none;">
+                    <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>标题</th>
+                        <th>类型</th>
+                        <th>状态</th>
+                        <th>创建时间</th>
+                        <th>操作</th>
+                    </tr>
+                    </thead>
+                    <tbody id="docTbody"></tbody>
+                </table>
+                <div class="empty-state" id="docEmpty">暂无文档，可点击「粘贴文档」或「上传文件」新增。</div>
+                <div id="paginationWrap" class="pagination-wrap" style="display:none;"></div>
+            </div>
+        </div>
+    </main>
+</div>
+<script>
+    const DOC_PAGE_SIZE = 10;
+    let docCurrentPage = 1;
+
+    function renderDocPagination(total, page, totalPages) {
+        const wrap = document.getElementById('paginationWrap');
+        if (!wrap || totalPages <= 1) { if (wrap) wrap.style.display = 'none'; return; }
+        let html = '<span class="pagination-info">共 ' + total + ' 条，第 ' + page + ' / ' + totalPages + ' 页</span><nav class="pagination">';
+        if (page > 1) html += '<a href="javascript:void(0)" data-page="' + (page - 1) + '">上一页</a>';
+        for (let p = 1; p <= totalPages; p++) {
+            if (p === page) html += '<span class="page-current">' + p + '</span>';
+            else html += '<a href="javascript:void(0)" data-page="' + p + '">' + p + '</a>';
+        }
+        if (page < totalPages) html += '<a href="javascript:void(0)" data-page="' + (page + 1) + '">下一页</a>';
+        html += '</nav>';
+        wrap.innerHTML = html;
+        wrap.style.display = 'flex';
+        wrap.querySelectorAll('a[data-page]').forEach(a => { a.addEventListener('click', function() { docCurrentPage = parseInt(this.getAttribute('data-page'), 10); loadDocuments(); }); });
+    }
+
+    function showBanner(ok, msg) {
+        const el = document.getElementById('banner');
+        el.classList.remove('ok', 'err');
+        el.classList.add(ok ? 'ok' : 'err');
+        el.textContent = msg;
+        el.style.display = 'block';
+        setTimeout(() => { el.style.display = 'none'; }, 2500);
+    }
+    function getProjectId() { return document.body.getAttribute('data-project-id'); }
+    async function loadDocuments(pageNum) {
+        if (typeof pageNum === 'number' && !isNaN(pageNum) && pageNum >= 1) docCurrentPage = pageNum;
+        const projectId = getProjectId();
+        if (!projectId) return;
+        try {
+            const resp = await fetch(`/api/projects/${projectId}/documents?page=${docCurrentPage}&size=${DOC_PAGE_SIZE}`);
+            if (!resp.ok) return;
+            const data = await resp.json();
+            const records = data.records || [];
+            const total = data.total || 0;
+            const totalPages = total === 0 ? 1 : Math.ceil(total / DOC_PAGE_SIZE);
+            const tbody = document.getElementById('docTbody');
+            const table = document.getElementById('docTable');
+            const empty = document.getElementById('docEmpty');
+            const paginationWrap = document.getElementById('paginationWrap');
+            tbody.innerHTML = '';
+            if (records.length === 0) { table.style.display = 'none'; empty.style.display = 'block'; if (paginationWrap) paginationWrap.style.display = 'none'; return; }
+            const statusText = { pending: '待处理', standardized: '已标准化', done: '已完成', failed: '失败' };
+            records.forEach(d => {
+                const tr = document.createElement('tr');
+                const type = d.documentType || '-';
+                const status = d.status || 'pending';
+                const canAnalyze = status === 'pending' || status === 'failed' || status === 'standardized';
+                const statusLabel = statusText[status] || status;
+                const safeTitle = (d.title ?? '').replace(/'/g, "\\'");
+                tr.innerHTML = `
+                    <td>${d.id}</td>
+                    <td>${d.title ?? ''}</td>
+                    <td><span class="tag">${type}</span></td>
+                    <td><span class="tag">${statusLabel}</span></td>
+                    <td>${d.createdAt ? (typeof d.createdAt === 'string' ? d.createdAt.replace('T', ' ').substring(0, 19) : d.createdAt) : ''}</td>
+                    <td>
+                        <button class="btn-primary" style="padding:3px 8px;font-size:11px;margin-right:4px;" ${canAnalyze ? '' : 'disabled'} onclick="analyzeDocument(${d.id})">AI提取接口信息</button>
+                        <button class="btn-primary" style="padding:3px 8px;font-size:11px;margin-right:4px;background:rgba(37,99,235,0.7);" onclick="renameDocument(${d.id}, '${safeTitle}')">重命名</button>
+                        <button class="btn-primary" style="padding:3px 8px;font-size:11px;background:rgba(239,68,68,0.6);" onclick="deleteDocument(${d.id})">删除</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+            table.style.display = 'table';
+            empty.style.display = 'none';
+            renderDocPagination(total, docCurrentPage, totalPages);
+        } catch (e) { console.error('加载文档异常', e); }
+    }
+    async function createDocument() {
+        const projectId = getProjectId();
+        const titleInput = document.getElementById('docTitle');
+        const typeSelect = document.getElementById('docType');
+        const contentInput = document.getElementById('docContent');
+        const content = contentInput.value.trim();
+        if (!content) { showBanner(false, '文档内容不能为空'); return; }
+        const title = titleInput.value.trim() || new Date().toLocaleString();
+        try {
+            const resp = await fetch(`/api/projects/${projectId}/documents/text`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title, content, documentType: typeSelect.value }) });
+            if (!resp.ok) { showBanner(false, '保存文档失败'); return; }
+            titleInput.value = ''; contentInput.value = '';
+            await loadDocuments(1);
+            showBanner(true, '保存文档成功');
+        } catch (e) { showBanner(false, '保存文档异常'); }
+    }
+    async function analyzeDocument(documentId) {
+        const projectId = getProjectId();
+        try {
+            const resp = await fetch(`/api/projects/${projectId}/documents/${documentId}/analyze`, { method: 'POST' });
+            if (!resp.ok) { showBanner(false, '分析文档失败'); return; }
+            await loadDocuments();
+            showBanner(true, '文档分析请求已完成');
+        } catch (e) { showBanner(false, '分析文档异常'); }
+    }
+    async function renameDocument(id, currentTitle) {
+        const title = prompt('请输入新的文档标题：', currentTitle || '');
+        if (title == null) return;
+        const trimmed = title.trim();
+        if (!trimmed) { showBanner(false, '标题不能为空'); return; }
+        const projectId = getProjectId();
+        try {
+            const resp = await fetch(`/api/projects/${projectId}/documents/${id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ title: trimmed }) });
+            if (!resp.ok) { showBanner(false, '重命名失败'); return; }
+            await loadDocuments();
+            showBanner(true, '文档标题已更新');
+        } catch (e) { showBanner(false, '重命名异常'); }
+    }
+    async function deleteDocument(id) {
+        if (!confirm('确定要删除该文档吗？此操作不可恢复。')) return;
+        const projectId = getProjectId();
+        try {
+            const resp = await fetch(`/api/projects/${projectId}/documents/${id}`, { method: 'DELETE' });
+            if (!resp.ok) { showBanner(false, '删除失败'); return; }
+            await loadDocuments();
+            showBanner(true, '文档已删除');
+        } catch (e) { showBanner(false, '删除异常'); }
+    }
+    function toggleForm() {
+        document.getElementById('formBlock').classList.toggle('show');
+    }
+    document.getElementById('fileInput').addEventListener('change', function(e) {
+        const file = e.target.files && e.target.files[0];
+        if (file) uploadDocument(file);
+        e.target.value = '';
+    });
+    async function uploadDocument(file) {
+        const projectId = getProjectId();
+        if (!projectId) return;
+        const title = prompt('文档标题（可选，留空使用文件名）：', file.name.replace(/\.[^.]+$/, ''));
+        if (title === null) return;
+        const form = new FormData();
+        form.append('file', file);
+        if (title.trim()) form.append('title', title.trim());
+        try {
+            const resp = await fetch(`/api/projects/${projectId}/documents/upload`, {
+                method: 'POST',
+                body: form
+            });
+            if (!resp.ok) {
+                const err = await resp.json().catch(() => ({}));
+                showBanner(false, err.message || '上传失败 ' + resp.status);
+                return;
+            }
+            await loadDocuments(1);
+            showBanner(true, '文件上传成功');
+        } catch (e) {
+            console.error(e);
+            showBanner(false, '上传异常，请上传 .md / .txt / .json 等文本文件');
+        }
+    }
+    document.addEventListener('DOMContentLoaded', function() { loadDocuments(); });
+</script>
+</body>
+</html>
