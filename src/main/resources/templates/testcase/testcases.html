@@ -14,9 +14,12 @@
             <div class="breadcrumb">
                 <a th:href="@{/}">工作台</a> &gt; 用例列表
             </div>
-            <div class="page-header">
-                <h1>用例列表</h1>
-                <p class="page-desc">最近添加的测试用例，点击「详情」查看详情，「代码」查看该用例的自动化代码，「AI生成代码」可一键生成。</p>
+            <div class="page-header" style="display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:8px;">
+                <div>
+                    <h1>用例列表</h1>
+                    <p class="page-desc">最近添加的测试用例，点击「详情」查看详情，「代码」查看该用例的自动化代码；可勾选用例后「批量生成代码」。</p>
+                </div>
+                <button type="button" id="btnBatchGenCode" class="btn btn-primary" disabled title="请先勾选要生成代码的用例">批量生成代码</button>
             </div>
             <div class="card">
                 <div id="banner" class="banner"></div>
@@ -24,6 +27,7 @@
                     <table class="data-table table-ops-wide">
                         <thead>
                             <tr>
+                                <th style="width:2.5em;"><input type="checkbox" id="checkAll" title="全选本页" style="cursor:pointer;"></th>
                                 <th>ID</th>
                                 <th>用例名称</th>
                                 <th>类型</th>
@@ -38,6 +42,7 @@
                         </thead>
                         <tbody>
                             <tr th:each="tc : ${recentCases}">
+                                <td><input type="checkbox" class="case-cb" th:attr="data-api-id=${tc.apiId},data-case-id=${tc.id}" style="cursor:pointer;" th:disabled="${tc.codeGenStatus == 'generating'}"></td>
                                 <td th:text="${tc.id}">-</td>
                                 <td th:text="${tc.caseName}">-</td>
                                 <td><span class="tag" th:text="${tc.caseType}">normal</span></td>
@@ -51,10 +56,10 @@
                                     <a th:href="@{/testcases/detail/{id}(id=${tc.id})}" class="link-btn">详情</a>
                                     <a th:href="@{/testcases/{caseId}/code(caseId=${tc.id})}" class="link-btn">代码</a>
                                     <th:block th:if="${tc.codeGenStatus != 'generating'}">
-                                        <button type="button" class="btn btn-primary" style="padding:4px 10px;font-size:12px;" th:attr="data-api-id=${tc.apiId},data-case-id=${tc.id}" onclick="generateCode(this)">AI生成代码</button>
+                                        <button type="button" class="btn btn-primary" style="padding:4px 10px;font-size:12px;" th:attr="data-api-id=${tc.apiId},data-case-id=${tc.id},data-done=${tc.codeGenStatus == 'done'}" onclick="generateCode(this)" th:text="${tc.codeGenStatus == 'done' ? '重新生成代码' : 'AI生成代码'}">AI生成代码</button>
                                     </th:block>
                                     <th:block th:if="${tc.codeGenStatus == 'generating'}">
-                                        <button type="button" class="btn btn-primary" style="padding:4px 10px;font-size:12px;" disabled>AI生成代码</button>
+                                        <button type="button" class="btn btn-primary" style="padding:4px 10px;font-size:12px;" disabled>生成中</button>
                                     </th:block>
                                 </td>
                             </tr>
@@ -87,6 +92,52 @@
         el.style.display = 'block';
         setTimeout(function() { el.style.display = 'none'; }, 2500);
     }
+    function updateBatchBtn() {
+        var any = document.querySelectorAll('.case-cb:checked').length > 0;
+        var btn = document.getElementById('btnBatchGenCode');
+        if (btn) btn.disabled = !any;
+    }
+    function batchGenerateCode() {
+        var checked = document.querySelectorAll('.case-cb:checked');
+        if (!checked || checked.length === 0) {
+            showBanner(false, '请先勾选要生成代码的用例');
+            return;
+        }
+        var btn = document.getElementById('btnBatchGenCode');
+        if (btn) { btn.disabled = true; btn.textContent = '提交中…'; }
+        var promises = [];
+        for (var i = 0; i < checked.length; i++) {
+            var apiId = checked[i].getAttribute('data-api-id');
+            var caseId = checked[i].getAttribute('data-case-id');
+            if (!apiId || !caseId) continue;
+            promises.push(fetch('/api/apis/' + apiId + '/testcodes/generate-case/' + caseId, { method: 'POST' }));
+        }
+        Promise.all(promises).then(function() {
+            showBanner(true, '已提交 ' + promises.length + ' 条用例的代码生成，请刷新列表查看进度');
+            if (btn) btn.textContent = '批量生成代码';
+            setTimeout(function() { window.location.reload(); }, 1500);
+        }).catch(function(e) {
+            showBanner(false, '批量提交异常，请稍后重试');
+            if (btn) { btn.disabled = false; btn.textContent = '批量生成代码'; }
+        });
+    }
+    document.addEventListener('DOMContentLoaded', function() {
+        var checkAll = document.getElementById('checkAll');
+        var table = document.querySelector('.table-scroll-wrap table tbody');
+        if (checkAll && table) {
+            checkAll.addEventListener('change', function() {
+                table.querySelectorAll('.case-cb:not(:disabled)').forEach(function(cb) { cb.checked = checkAll.checked; });
+                updateBatchBtn();
+            });
+        }
+        table = document.querySelector('.table-scroll-wrap table tbody');
+        if (table) {
+            table.addEventListener('change', function() { updateBatchBtn(); });
+        }
+        var btnBatch = document.getElementById('btnBatchGenCode');
+        if (btnBatch) btnBatch.addEventListener('click', batchGenerateCode);
+        updateBatchBtn();
+    });
     function generateCode(btn) {
         var apiId = btn.getAttribute('data-api-id');
         var caseId = btn.getAttribute('data-case-id');
@@ -103,9 +154,9 @@
                 setTimeout(function() { window.location.reload(); }, 1500);
             })
             .catch(function(e) {
-                showBanner(false, e.message || 'AI生成代码异常');
+                showBanner(false, e.message || '生成代码异常，请稍后重试');
                 btn.disabled = false;
-                btn.textContent = 'AI生成代码';
+                btn.textContent = btn.getAttribute('data-done') === 'true' ? '重新生成代码' : 'AI生成代码';
             });
     }
 </script>

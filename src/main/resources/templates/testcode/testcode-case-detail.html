@@ -6,6 +6,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <link rel="stylesheet" th:href="@{/css/layout.css}">
     <style>
+        .code-summary { display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 10px 20px; padding: 14px 18px; margin-bottom: 16px; border-radius: 12px; background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(148, 163, 184, 0.15); font-size: 13px; }
+        .code-summary-item { display: flex; gap: 8px; }
+        .code-summary-item .label { color: #64748b; flex-shrink: 0; }
+        .code-summary-item .value { color: #e2e8f0; }
         .code-item { margin-top: 12px; padding: 12px 14px; border-radius: 12px; background: rgba(15, 23, 42, 0.9); border: 1px solid rgba(55, 65, 81, 0.9); }
         .code-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 12px; color: var(--text-secondary); }
         .code-item pre { margin: 4px 0 0; padding: 10px 12px; border-radius: 8px; background: #020617; font-size: 12px; overflow-x: auto; }
@@ -24,8 +28,21 @@
                 <h1 th:text="${testCode != null ? '代码详情 · ' + case.caseName : '代码详情 · 未生成'}">代码详情</h1>
             </div>
             <div id="banner" class="banner"></div>
+            <!-- 列表基本信息（与用例自动化代码列表一致，便于在详情页查看） -->
+            <div class="card" style="margin-bottom: 16px;">
+                <div class="code-summary">
+                    <div class="code-summary-item"><span class="label">关联用例</span><span class="value" th:text="${case != null ? case.caseName : '—'}">—</span></div>
+                    <div class="code-summary-item"><span class="label">所属接口</span><span class="value" th:text="${apiName != null ? apiName : '—'}">—</span></div>
+                    <div class="code-summary-item"><span class="label">接口地址</span><span class="value" th:text="${apiPath != null ? apiPath : '—'}">—</span></div>
+                    <div class="code-summary-item"><span class="label">所属项目</span><span class="value" th:text="${projectName != null ? projectName : '—'}">—</span></div>
+                    <div class="code-summary-item" th:if="${testCode != null}"><span class="label">类名</span><span class="value" th:text="${testCode.className}">—</span></div>
+                    <div class="code-summary-item" th:if="${testCode != null}"><span class="label">语言 / 框架</span><span class="value" th:text="${(testCode.language != null ? testCode.language : 'java') + ' / ' + (testCode.framework != null ? testCode.framework : 'junit5')}">—</span></div>
+                    <div class="code-summary-item" th:if="${testCode != null}"><span class="label">状态</span><span class="value" th:text="${testCode.status != null ? testCode.status : '已生成'}">—</span></div>
+                    <div class="code-summary-item" th:if="${testCode != null and testCode.createdAt != null}"><span class="label">创建时间</span><span class="value" th:text="${#temporals.format(testCode.createdAt, 'yyyy-MM-dd HH:mm:ss')}">—</span></div>
+                </div>
+            </div>
             <div class="card">
-                <!-- 已生成代码：展示内容与操作 -->
+                <!-- 已生成代码：展示内容与操作，并提供重新生成按钮 -->
                 <th:block th:if="${testCode != null}">
                     <div class="code-item">
                         <div class="code-header">
@@ -35,6 +52,7 @@
                                 <span class="tag" th:text="${testCode.className}">-</span>
                             </div>
                             <div>
+                                <button type="button" class="btn btn-primary" id="btnGenCode" style="padding:4px 10px;font-size:12px;margin-right:6px;" th:disabled="${case.codeGenStatus == 'generating'}" data-btn-text="重新生成代码" th:text="${case.codeGenStatus == 'generating' ? '生成中' : '重新生成代码'}">重新生成代码</button>
                                 <button type="button" class="btn btn-primary" style="padding:4px 10px;font-size:12px;margin-right:6px;"
                                     th:data-code-id="${testCode.id}" onclick="saveCode(this.getAttribute('data-code-id'))">保存到工程</button>
                                 <button type="button" class="btn btn-secondary" style="padding:4px 10px;font-size:12px;"
@@ -49,7 +67,7 @@
                     <div class="empty-state">
                         <p>该用例尚未生成自动化代码。</p>
                         <p>点击下方按钮为该用例生成 JUnit 5 风格的接口测试代码。</p>
-                        <button type="button" class="btn btn-primary" id="btnGenCode" th:disabled="${case.codeGenStatus == 'generating'}" th:text="${case.codeGenStatus == 'generating' ? '生成中' : 'AI生成测试用例自动化代码'}">AI生成测试用例自动化代码</button>
+                        <button type="button" class="btn btn-primary" id="btnGenCode" th:disabled="${case.codeGenStatus == 'generating'}" data-btn-text="AI生成代码" th:text="${case.codeGenStatus == 'generating' ? '生成中' : 'AI生成代码'}">AI生成代码</button>
                     </div>
                 </th:block>
             </div>
@@ -73,9 +91,9 @@
         fetch('/api/apis/' + apiId + '/testcodes/' + codeId + '/save', { method: 'POST' })
             .then(function(r) {
                 if (r.ok) showBanner(true, '测试代码已保存到本地工程');
-                else showBanner(false, '保存失败，状态码：' + r.status);
+                else showBanner(false, '保存失败，请稍后重试');
             })
-            .catch(function(e) { showBanner(false, '保存异常'); });
+            .catch(function(e) { showBanner(false, '保存异常，请稍后重试'); });
     }
     function downloadCode(codeId) {
         var apiId = getApiId();
@@ -90,7 +108,9 @@
                 var resp = await fetch('/api/apis/' + apiId + '/testcodes/generate-case/' + caseId, { method: 'POST' });
                 if (!resp.ok) {
                     var err = await resp.json().catch(function() { return {}; });
-                    showBanner(false, err.message || '生成测试代码失败');
+                    showBanner(false, err.message || '生成代码失败，请稍后重试');
+                    btnGen.disabled = false;
+                    btnGen.textContent = btnGen.getAttribute('data-btn-text') || 'AI生成代码';
                     return;
                 }
                 var data = await resp.json();
@@ -99,7 +119,9 @@
                 btnGen.textContent = '生成中';
                 setTimeout(function() { window.location.reload(); }, 2000);
             } catch (e) {
-                showBanner(false, '生成测试代码异常，请查看控制台');
+                showBanner(false, '生成代码异常，请稍后重试');
+                btnGen.disabled = false;
+                btnGen.textContent = btnGen.getAttribute('data-btn-text') || 'AI生成代码';
             }
         });
     }

@@ -16,26 +16,32 @@
             </div>
             <div class="page-header">
                 <h1>用例自动化代码列表</h1>
-                <p class="page-desc">最近生成的测试代码（一条用例一条），点击「详情」进入该接口的测试代码页查看、下载或保存到工程。</p>
+                <p class="page-desc">最近生成的测试代码（一条用例一条），点击「详情」进入该条代码详情页查看、下载、保存到工程，或对该条用例重新生成代码（受状态控制）。</p>
             </div>
             <div class="card">
                 <div th:if="${recentCodes != null and !recentCodes.isEmpty()}" class="table-scroll-wrap">
                     <table class="data-table table-ops-wide">
                         <thead>
-                            <tr><th>类名</th><th>语言</th><th>框架</th><th>关联用例</th><th>所属接口</th><th>所属项目</th><th>状态</th><th>创建时间</th><th>操作</th></tr>
+                            <tr>
+                                <th style="width:2.5em;"><input type="checkbox" id="checkAllCodes" title="全选本页" style="cursor:pointer;"></th>
+                                <th>类名</th><th>语言</th><th>框架</th><th>关联用例</th><th>所属接口</th><th>接口地址</th><th>所属项目</th><th>状态</th><th>创建时间</th><th>操作</th>
+                            </tr>
                         </thead>
                         <tbody>
                             <tr th:each="c : ${recentCodes}">
+                                <td><input type="checkbox" class="row-cb" th:attr="data-code-id=${c.id}" style="cursor:pointer;"></td>
                                 <td th:text="${c.className}">-</td>
                                 <td><span class="tag" th:text="${c.language}">java</span></td>
                                 <td><span class="tag" th:text="${c.framework}">junit5</span></td>
                                 <td th:text="${(testCaseIdToCaseName != null and c.testCaseId != null and testCaseIdToCaseName[c.testCaseId] != null) ? testCaseIdToCaseName[c.testCaseId] : (c.testCaseId != null ? '用例#' + c.testCaseId : '—')}">—</td>
                                 <td th:text="${apiIdToName != null and c.apiId != null and apiIdToName[c.apiId] != null ? apiIdToName[c.apiId] : '—'}">—</td>
+                                <td th:text="${apiIdToPath != null and c.apiId != null and apiIdToPath[c.apiId] != null ? apiIdToPath[c.apiId] : '—'}">—</td>
                                 <td th:text="${projectIdToName != null and c.projectId != null and projectIdToName[c.projectId] != null ? projectIdToName[c.projectId] : '—'}">—</td>
                                 <td><span class="tag" th:text="${codeStatusDisplay != null and c.status != null and codeStatusDisplay[c.status] != null ? codeStatusDisplay[c.status] : c.status}">已生成</span></td>
                                 <td th:text="${c.createdAt != null ? #temporals.format(c.createdAt, 'yyyy-MM-dd HH:mm:ss') : '—'}">-</td>
                                 <td>
-                                    <a th:href="@{/projects/{pid}/apis/{aid}/testcodes(pid=${c.projectId}, aid=${c.apiId}, from='testcodes')}" class="link-btn">详情</a>
+                                    <a th:if="${c.testCaseId != null}" th:href="@{/testcases/{caseId}/code(caseId=${c.testCaseId})}" class="link-btn">详情</a>
+                                    <span th:if="${c.testCaseId == null}" class="text-muted">—</span>
                                 </td>
                             </tr>
                         </tbody>
@@ -57,5 +63,16 @@
         </div>
     </main>
 </div>
+<script th:inline="javascript">
+    document.addEventListener('DOMContentLoaded', function() {
+        var checkAll = document.getElementById('checkAllCodes');
+        var tbody = document.querySelector('.table-scroll-wrap tbody');
+        if (checkAll && tbody) {
+            checkAll.addEventListener('change', function() {
+                tbody.querySelectorAll('.row-cb').forEach(function(cb) { cb.checked = checkAll.checked; });
+            });
+        }
+    });
+</script>
 </body>
 </html>

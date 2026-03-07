@@ -24,6 +24,7 @@
                     <table class="data-table table-ops-wide">
                         <thead>
                             <tr>
+                                <th style="width:2.5em;"><input type="checkbox" id="checkAllApis" title="全选本页" style="cursor:pointer;"></th>
                                 <th>ID</th>
                                 <th class="col-name">名称</th>
                                 <th>方法</th>
@@ -38,6 +39,7 @@
                         </thead>
                         <tbody>
                             <tr th:each="api : ${recentApis}">
+                                <td><input type="checkbox" class="row-cb" th:attr="data-id=${api.id}" style="cursor:pointer;"></td>
                                 <td th:text="${api.id}">-</td>
                                 <td class="col-name" th:text="${api.apiName}">-</td>
                                 <td><span class="tag" th:text="${api.httpMethod}">GET</span></td>
@@ -135,14 +137,14 @@
                 const resp = await fetch('/api/projects/' + projectId + '/apis/' + apiId + '/generate-cases', { method: 'POST', headers: { 'Content-Type': 'application/json' } });
                 if (!resp.ok) {
                     const err = await resp.json().catch(function() { return {}; });
-                    showBanner(false, err.message || 'AI 生成用例失败');
+                    showBanner(false, err.message || '生成用例失败，请稍后重试');
                     return;
                 }
                 const data = await resp.json();
                 showBanner(true, data.message || '已开始生成，请刷新列表查看进度');
                 setTimeout(function() { window.location.reload(); }, 1500);
             } catch (e) {
-                showBanner(false, 'AI 生成用例异常');
+                showBanner(false, '生成用例异常，请稍后重试');
             }
         })();
     }
@@ -164,7 +166,7 @@
                 document.getElementById('modalResponseSchema').value = a.responseSchema || '';
                 document.getElementById('editModal').classList.add('show');
             })
-            .catch(function() { showBanner(false, '加载接口详情失败'); });
+            .catch(function() { showBanner(false, '加载详情失败，请稍后重试'); });
     }
 
     function closeEditModal() {
@@ -177,7 +179,7 @@
         if (!editingProjectId || !editingApiId) return;
         var apiName = document.getElementById('modalApiName').value.trim();
         var apiPath = document.getElementById('modalApiPath').value.trim();
-        if (!apiName || !apiPath) { showBanner(false, '接口名称和路径不能为空'); return; }
+        if (!apiName || !apiPath) { showBanner(false, '接口名称与路径不能为空'); return; }
         var body = {
             apiName: apiName,
             apiPath: apiPath,
@@ -192,11 +194,11 @@
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(body)
         }).then(function(r) {
-            if (!r.ok) { showBanner(false, '更新接口失败'); return; }
+            if (!r.ok) { showBanner(false, '更新失败，请稍后重试'); return; }
             closeEditModal();
             showBanner(true, '接口已更新');
             setTimeout(function() { window.location.reload(); }, 800);
-        }).catch(function() { showBanner(false, '更新接口异常'); });
+        }).catch(function() { showBanner(false, '更新异常，请稍后重试'); });
     }
 
     function disableApi(btn) {
@@ -204,11 +206,11 @@
         if (!projectId || !apiId) return;
         fetch('/api/projects/' + projectId + '/apis/' + apiId, { method: 'DELETE' })
             .then(function(r) {
-                if (!r.ok) { showBanner(false, '禁用接口失败'); return; }
+                if (!r.ok) { showBanner(false, '禁用失败，请稍后重试'); return; }
                 showBanner(true, '接口已禁用');
                 setTimeout(function() { window.location.reload(); }, 800);
             })
-            .catch(function() { showBanner(false, '禁用接口异常'); });
+            .catch(function() { showBanner(false, '禁用异常，请稍后重试'); });
     }
 
     function enableApi(btn) {
@@ -216,11 +218,11 @@
         if (!projectId || !apiId) return;
         fetch('/api/projects/' + projectId + '/apis/' + apiId + '/enable', { method: 'PATCH' })
             .then(function(r) {
-                if (!r.ok) { showBanner(false, '启用接口失败'); return; }
+                if (!r.ok) { showBanner(false, '启用失败，请稍后重试'); return; }
                 showBanner(true, '接口已启用');
                 setTimeout(function() { window.location.reload(); }, 800);
             })
-            .catch(function() { showBanner(false, '启用接口异常'); });
+            .catch(function() { showBanner(false, '启用异常，请稍后重试'); });
     }
 
     function deleteApi(btn) {
@@ -229,12 +231,21 @@
         if (!projectId || !apiId) return;
         fetch('/api/projects/' + projectId + '/apis/' + apiId, { method: 'DELETE' })
             .then(function(r) {
-                if (!r.ok) { showBanner(false, '删除接口失败'); return; }
+                if (!r.ok) { showBanner(false, '删除失败，请稍后重试'); return; }
                 showBanner(true, '接口已删除');
                 setTimeout(function() { window.location.reload(); }, 800);
             })
-            .catch(function() { showBanner(false, '删除接口异常'); });
+            .catch(function() { showBanner(false, '删除异常，请稍后重试'); });
     }
+    document.addEventListener('DOMContentLoaded', function() {
+        var checkAll = document.getElementById('checkAllApis');
+        var tbody = document.querySelector('.table-scroll-wrap tbody');
+        if (checkAll && tbody) {
+            checkAll.addEventListener('change', function() {
+                tbody.querySelectorAll('.row-cb').forEach(function(cb) { cb.checked = checkAll.checked; });
+            });
+        }
+    });
 </script>
 </body>
 </html>

@@ -66,15 +66,15 @@
             <div class="card">
             <div class="card-header">
                 <div class="meta">
-                    基于当前接口及其测试用例，生成 JUnit 5 风格的 Java 测试代码。
+                    当前接口下已生成的测试代码。请在「用例列表」中为用例单条生成或勾选后批量生成代码。
                 </div>
-                <button class="btn-primary" onclick="generateCode()">AI生成测试用例自动化代码</button>
+                <label style="display:flex;align-items:center;gap:6px;cursor:pointer;font-size:13px;color:#94a3b8;"><input type="checkbox" id="checkAllCodeList" title="全选本页" style="cursor:pointer;"> 全选本页</label>
             </div>
 
             <div id="banner" class="banner"></div>
 
             <div id="codeList"></div>
-            <div class="empty" id="codeEmpty">暂无测试代码，点击右上角「AI生成测试用例自动化代码」开始。</div>
+            <div class="empty" id="codeEmpty">暂无测试代码，请到「用例列表」为用例生成代码。</div>
             <div id="paginationWrap" class="pagination-wrap" style="display:none;"></div>
             </div>
         </div>
@@ -153,11 +153,14 @@
                 div.className = 'code-item';
                 div.innerHTML = `
                     <div class="code-header">
-                        <div>
+                        <div style="display:flex;align-items:center;gap:10px;">
+                            <input type="checkbox" class="row-cb" data-id="${c.id}" style="cursor:pointer;flex-shrink:0;">
+                            <span>
                             ${caseLabel ? '<span class="tag">' + caseLabel + '</span>' : ''}
                             <span class="tag">${c.language ?? 'java'}</span>
                             <span class="tag">${c.framework ?? 'junit5'}</span>
                             <span class="tag">${status}</span>
+                            </span>
                         </div>
                         <div>
                             <span style="margin-right:8px;">${when}</span>
@@ -177,26 +180,6 @@
         }
     }
 
-    async function generateCode() {
-        const apiId = getApiId();
-        try {
-            const resp = await fetch(`/api/apis/${apiId}/testcodes`, {
-                method: 'POST'
-            });
-            if (!resp.ok) {
-                showBanner(false, '生成测试代码失败，状态码：' + resp.status);
-                return;
-            }
-            const data = await resp.json().catch(() => ({}));
-            await loadCodes(1);
-            const count = data.count != null ? data.count : 0;
-            showBanner(true, count > 0 ? '成功生成 ' + count + ' 条测试代码（一条用例一条）' : '生成测试代码成功');
-        } catch (e) {
-            console.error('生成测试代码异常', e);
-            showBanner(false, '生成测试代码异常，请查看控制台');
-        }
-    }
-
     async function saveCode(id) {
         const apiId = getApiId();
         try {
@@ -204,14 +187,14 @@
                 method: 'POST'
             });
             if (!resp.ok) {
-                showBanner(false, '保存测试代码失败，状态码：' + resp.status);
+                showBanner(false, '保存失败，请稍后重试');
                 return;
             }
             await loadCodes(codeCurrentPage);
             showBanner(true, '测试代码已保存到本地工程');
         } catch (e) {
             console.error('保存测试代码异常', e);
-            showBanner(false, '保存测试代码异常，请查看控制台');
+            showBanner(false, '保存异常，请稍后重试');
         }
     }
 
@@ -220,7 +203,16 @@
         window.location.href = `/api/apis/${apiId}/testcodes/${id}/download`;
     }
 
-    document.addEventListener('DOMContentLoaded', function() { loadCodes(); });
+    document.addEventListener('DOMContentLoaded', function() {
+        loadCodes();
+        var checkAll = document.getElementById('checkAllCodeList');
+        var list = document.getElementById('codeList');
+        if (checkAll && list) {
+            checkAll.addEventListener('change', function() {
+                list.querySelectorAll('.row-cb').forEach(function(cb) { cb.checked = checkAll.checked; });
+            });
+        }
+    });
 </script>
 </body>
 </html>

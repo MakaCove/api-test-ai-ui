@@ -19,19 +19,13 @@
             <div class="card">
                 <div class="card-header">
                     <div class="card-desc" style="flex:1;margin:0;">创建项目后可在项目内进行文档管理、接口管理与用例生成。</div>
-                    <button class="btn btn-primary" onclick="toggleCreateForm()">新建项目</button>
+                    <button class="btn btn-primary" onclick="openCreateProjectModal()">新建项目</button>
                 </div>
-                <form id="createForm" class="form-block" onsubmit="return false;">
-                    <div class="form-row">
-                        <input type="text" id="projectName" placeholder="项目名称" required style="flex:2;min-width:160px;">
-                        <input type="text" id="projectDescription" placeholder="项目描述" style="flex:2;min-width:200px;">
-                        <button type="button" class="btn btn-primary" onclick="createProject()">保存</button>
-                    </div>
-                </form>
                 <div class="table-scroll-wrap" id="projectTableWrap" style="display:none;">
                     <table id="projectTable" class="data-table table-ops-wide">
                     <thead>
                     <tr>
+                        <th style="width:2.5em;"><input type="checkbox" id="checkAllProjects" title="全选本页" style="cursor:pointer;"></th>
                         <th>ID</th>
                         <th>项目名称</th>
                         <th>描述</th>
@@ -48,6 +42,28 @@
         </div>
     </main>
 </div>
+
+<!-- 新建项目弹窗 -->
+<div id="createProjectModal" class="modal-overlay" onclick="if(event.target===this) closeCreateProjectModal()">
+    <div class="modal-box" onclick="event.stopPropagation()">
+        <div class="modal-title">新建项目</div>
+        <div class="modal-body">
+            <div class="form-group">
+                <label for="projectName">项目名称</label>
+                <input type="text" id="projectName" placeholder="项目名称" required>
+            </div>
+            <div class="form-group">
+                <label for="projectDescription">项目描述（可选）</label>
+                <input type="text" id="projectDescription" placeholder="项目描述">
+            </div>
+        </div>
+        <div class="modal-footer">
+            <button type="button" class="btn btn-cancel" onclick="closeCreateProjectModal()">取消</button>
+            <button type="button" class="btn btn-primary" onclick="createProject()">保存</button>
+        </div>
+    </div>
+</div>
+
 <script th:inline="javascript">
     const PAGE_SIZE = 10;
     let currentPage = 1;
@@ -98,6 +114,7 @@
                 const tr = document.createElement('tr');
                 const created = p.createdAt ? (typeof p.createdAt === 'string' ? p.createdAt.replace('T', ' ').substring(0, 19) : p.createdAt) : '';
                 tr.innerHTML = `
+                    <td><input type="checkbox" class="row-cb" data-id="${p.id}" style="cursor:pointer;"></td>
                     <td>${p.id}</td>
                     <td>${p.name ?? ''}</td>
                     <td>${p.description ?? ''}</td>
@@ -111,6 +128,14 @@
             renderPagination(total, currentPage, totalPages);
         } catch (e) { console.error('加载项目异常', e); }
     }
+    function openCreateProjectModal() {
+        document.getElementById('projectName').value = '';
+        document.getElementById('projectDescription').value = '';
+        document.getElementById('createProjectModal').classList.add('show');
+    }
+    function closeCreateProjectModal() {
+        document.getElementById('createProjectModal').classList.remove('show');
+    }
     async function createProject() {
         const nameInput = document.getElementById('projectName');
         const descInput = document.getElementById('projectDescription');
@@ -119,15 +144,22 @@
         if (!name) { alert('项目名称不能为空'); return; }
         try {
             const resp = await fetch('/api/projects', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, description }) });
-            if (!resp.ok) { alert('创建项目失败，状态码：' + resp.status); return; }
+            if (!resp.ok) { alert('创建项目失败，请稍后重试'); return; }
+            closeCreateProjectModal();
             nameInput.value = ''; descInput.value = '';
             await loadProjects(1);
-        } catch (e) { console.error('创建项目异常', e); alert('创建项目异常'); }
+        } catch (e) { console.error('创建项目异常', e); alert('创建项目异常，请稍后重试'); }
     }
-    function toggleCreateForm() {
-        document.getElementById('createForm').classList.toggle('show');
-    }
-    document.addEventListener('DOMContentLoaded', function() { loadProjects(); });
+    document.addEventListener('DOMContentLoaded', function() {
+        loadProjects();
+        var checkAll = document.getElementById('checkAllProjects');
+        var tbody = document.getElementById('projectTbody');
+        if (checkAll && tbody) {
+            checkAll.addEventListener('change', function() {
+                tbody.querySelectorAll('.row-cb').forEach(function(cb) { cb.checked = checkAll.checked; });
+            });
+        }
+    });
 </script>
 </body>
 </html>

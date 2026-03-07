@@ -46,14 +46,59 @@ public class HomeController {
     private static final int RECENT_LIMIT = 10;
     private static final int PAGE_SIZE = 10;
 
-    /** 工作台首页：快捷入口 + 最近接口/最近用例 */
+    /** 工作台首页：数据统计 + 快捷入口 + 最近接口/最近用例 */
     @GetMapping
     public String index(Model model) {
         log.debug("访问工作台首页");
         model.addAttribute("title", "API 自动化测试 AI 平台");
         model.addAttribute("welcomeMessage", "在这里，你可以从接口文档出发，一路生成接口信息、测试用例和自动化测试代码。");
+        fillDashboardStats(model);
         fillRecentLists(model);
         return "dashboard/index";
+    }
+
+    /** 工作台统计数据：总数（项目/接口/用例/生成代码）+ 各项目下的接口数/用例数/代码数 */
+    private void fillDashboardStats(Model model) {
+        LambdaQueryWrapper<Project> projectWrapper = new LambdaQueryWrapper<>();
+        projectWrapper.eq(Project::getDeleted, 0);
+        long totalProjects = projectMapper.selectCount(projectWrapper);
+        model.addAttribute("totalProjects", totalProjects);
+
+        long totalApis = apiInfoMapper.selectCount(null);
+        model.addAttribute("totalApis", totalApis);
+
+        LambdaQueryWrapper<TestCase> caseWrapper = new LambdaQueryWrapper<>();
+        caseWrapper.isNull(TestCase::getDeletedAt);
+        long totalCases = testCaseMapper.selectCount(caseWrapper);
+        model.addAttribute("totalCases", totalCases);
+
+        LambdaQueryWrapper<TestCode> codeWrapper = new LambdaQueryWrapper<>();
+        codeWrapper.isNull(TestCode::getDeletedAt);
+        long totalCodes = testCodeMapper.selectCount(codeWrapper);
+        model.addAttribute("totalCodes", totalCodes);
+
+        List<Project> projects = projectMapper.selectList(projectWrapper.orderByDesc(Project::getCreatedAt));
+        List<Map<String, Object>> projectStats = new ArrayList<>();
+        for (Project p : projects) {
+            Long pid = p.getId();
+            LambdaQueryWrapper<ApiInfo> aw = new LambdaQueryWrapper<>();
+            aw.eq(ApiInfo::getProjectId, pid);
+            long apiCount = apiInfoMapper.selectCount(aw);
+            LambdaQueryWrapper<TestCase> cw = new LambdaQueryWrapper<>();
+            cw.eq(TestCase::getProjectId, pid).isNull(TestCase::getDeletedAt);
+            long caseCount = testCaseMapper.selectCount(cw);
+            LambdaQueryWrapper<TestCode> codew = new LambdaQueryWrapper<>();
+            codew.eq(TestCode::getProjectId, pid).isNull(TestCode::getDeletedAt);
+            long codeCount = testCodeMapper.selectCount(codew);
+            Map<String, Object> row = new LinkedHashMap<>();
+            row.put("projectId", pid);
+            row.put("projectName", p.getName() != null ? p.getName() : "");
+            row.put("apiCount", apiCount);
+            row.put("caseCount", caseCount);
+            row.put("codeCount", codeCount);
+            projectStats.add(row);
+        }
+        model.addAttribute("projectStats", projectStats);
     }
 
     /** 全局接口列表页，每页 10 条分页 */
@@ -177,6 +222,7 @@ public class HomeController {
         model.addAttribute("apiId", tc.getApiId());
         model.addAttribute("projectName", project != null ? project.getName() : "项目");
         model.addAttribute("apiName", api != null ? api.getApiName() : "接口");
+        model.addAttribute("apiPath", api != null && api.getApiPath() != null ? api.getApiPath() : "");
 
         LambdaQueryWrapper<TestCode> wrapper = new LambdaQueryWrapper<>();
         wrapper.eq(TestCode::getTestCaseId, caseId).eq(TestCode::getApiId, tc.getApiId()).isNull(TestCode::getDeletedAt)
@@ -201,6 +247,7 @@ public class HomeController {
         model.addAttribute("totalPages", total == 0 ? 1 : (int) ((total + PAGE_SIZE - 1) / PAGE_SIZE));
         Map<Long, String> projectIdToName = new LinkedHashMap<>();
         Map<Long, String> apiIdToName = new LinkedHashMap<>();
+        Map<Long, String> apiIdToPath = new LinkedHashMap<>();
         Map<Long, String> testCaseIdToCaseName = new LinkedHashMap<>();
         for (TestCode c : list) {
             if (c.getProjectId() != null && !projectIdToName.containsKey(c.getProjectId())) {
@@ -211,6 +258,10 @@ public class HomeController {
                 ApiInfo a = apiInfoMapper.selectById(c.getApiId());
                 apiIdToName.put(c.getApiId(), a != null ? a.getApiName() : "");
             }
+            if (c.getApiId() != null && !apiIdToPath.containsKey(c.getApiId())) {
+                ApiInfo a = apiInfoMapper.selectById(c.getApiId());
+                apiIdToPath.put(c.getApiId(), a != null && a.getApiPath() != null ? a.getApiPath() : "");
+            }
             if (c.getTestCaseId() != null && !testCaseIdToCaseName.containsKey(c.getTestCaseId())) {
                 TestCase tc = testCaseMapper.selectById(c.getTestCaseId());
                 testCaseIdToCaseName.put(c.getTestCaseId(), tc != null && tc.getCaseName() != null ? tc.getCaseName() : "用例#" + c.getTestCaseId());
@@ -218,6 +269,7 @@ public class HomeController {
         }
         model.addAttribute("projectIdToName", projectIdToName);
         model.addAttribute("apiIdToName", apiIdToName);
+        model.addAttribute("apiIdToPath", apiIdToPath);
         model.addAttribute("testCaseIdToCaseName", testCaseIdToCaseName);
         Map<String, String> codeStatusDisplay = new LinkedHashMap<>();
         codeStatusDisplay.put("generated", "已生成");

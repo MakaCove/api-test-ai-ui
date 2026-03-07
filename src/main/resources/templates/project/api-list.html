@@ -29,6 +29,7 @@
                     <table id="apiTable" class="data-table table-ops-wide">
                     <thead>
                     <tr>
+                        <th style="width:2.5em;"><input type="checkbox" id="checkAllApis" title="全选本页" style="cursor:pointer;"></th>
                         <th>ID</th>
                         <th class="col-name">名称</th>
                         <th>方法</th>
@@ -198,6 +199,7 @@
                     : `<button type="button" class="btn btn-primary" style="padding:4px 10px;font-size:12px;" disabled>AI生成用例</button>`;
                 const createdAt = a.createdAt ? (typeof a.createdAt === 'string' ? a.createdAt.replace('T', ' ').substring(0, 19) : a.createdAt) : '';
                 tr.innerHTML = `
+                    <td><input type="checkbox" class="row-cb" data-id="${a.id}" style="cursor:pointer;"></td>
                     <td>${a.id}</td>
                     <td class="col-name">${a.apiName ?? ''}</td>
                     <td><span class="tag">${a.httpMethod ?? ''}</span></td>
@@ -226,20 +228,20 @@
         if (!projectId) return;
         try {
             const resp = await fetch(`/api/projects/${projectId}/apis/${apiId}/generate-cases`, { method: 'POST', headers: { 'Content-Type': 'application/json' } });
-            if (!resp.ok) { const err = await resp.json().catch(() => ({})); showBanner(false, err.message || 'AI 生成用例失败'); await loadApis(apiCurrentPage); return; }
+            if (!resp.ok) { const err = await resp.json().catch(() => ({})); showBanner(false, err.message || '生成用例失败，请稍后重试'); await loadApis(apiCurrentPage); return; }
             const data = await resp.json();
             showBanner(true, data.message || '已开始生成，请刷新列表查看进度');
             await loadApis(apiCurrentPage);
-        } catch (e) { showBanner(false, 'AI 生成用例异常'); await loadApis(apiCurrentPage); }
+        } catch (e) { showBanner(false, '生成用例异常，请稍后重试'); await loadApis(apiCurrentPage); }
     }
     async function enableApi(id) {
         const projectId = getProjectId();
         try {
             const resp = await fetch(`/api/projects/${projectId}/apis/${id}/enable`, { method: 'PATCH' });
-            if (!resp.ok) { showBanner(false, '启用接口失败'); return; }
+            if (!resp.ok) { showBanner(false, '启用失败，请稍后重试'); return; }
             await loadApis();
             showBanner(true, '接口已启用');
-        } catch (e) { showBanner(false, '启用接口异常'); }
+        } catch (e) { showBanner(false, '启用异常，请稍后重试'); }
     }
     function collectApiForm() {
         const apiName = document.getElementById('apiName').value.trim();
@@ -249,7 +251,7 @@
         const tags = document.getElementById('apiTags').value.trim();
         const requestParams = document.getElementById('apiRequestParams').value.trim();
         const responseSchema = document.getElementById('apiResponseSchema').value.trim();
-        if (!apiName || !apiPath) { showBanner(false, '接口名称和路径不能为空'); return null; }
+        if (!apiName || !apiPath) { showBanner(false, '接口名称与路径不能为空'); return null; }
         return { projectId: getProjectId(), apiName, apiPath, httpMethod, description, tags, requestParams: requestParams || null, responseSchema: responseSchema || null };
     }
     function clearApiForm() {
@@ -268,18 +270,18 @@
         const body = { apiName, apiPath, httpMethod, description, tags, requestParams, responseSchema };
         try {
             const resp = await fetch(`/api/projects/${projectId}/apis`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-            if (!resp.ok) { showBanner(false, '创建接口失败'); return; }
+            if (!resp.ok) { showBanner(false, '创建失败，请稍后重试'); return; }
             clearApiForm();
             closeCreateApiModal();
             await loadApis(1);
             showBanner(true, '创建接口成功');
-        } catch (e) { showBanner(false, '提交接口异常'); }
+        } catch (e) { showBanner(false, '提交异常，请稍后重试'); }
     }
     async function editApi(id) {
         const projectId = getProjectId();
         try {
             const resp = await fetch(`/api/projects/${projectId}/apis/${id}`);
-            if (!resp.ok) { showBanner(false, '加载接口详情失败'); return; }
+            if (!resp.ok) { showBanner(false, '加载详情失败，请稍后重试'); return; }
             const a = await resp.json();
             document.getElementById('modalApiName').value = a.apiName || '';
             document.getElementById('modalApiPath').value = a.apiPath || '';
@@ -290,7 +292,7 @@
             document.getElementById('modalResponseSchema').value = a.responseSchema || '';
             editingApiId = id;
             document.getElementById('editModal').classList.add('show');
-        } catch (e) { showBanner(false, '加载接口详情异常'); }
+        } catch (e) { showBanner(false, '加载详情异常，请稍后重试'); }
     }
     function closeEditModal() {
         document.getElementById('editModal').classList.remove('show');
@@ -300,7 +302,7 @@
         if (!editingApiId) return;
         const apiName = document.getElementById('modalApiName').value.trim();
         const apiPath = document.getElementById('modalApiPath').value.trim();
-        if (!apiName || !apiPath) { showBanner(false, '接口名称和路径不能为空'); return; }
+        if (!apiName || !apiPath) { showBanner(false, '接口名称与路径不能为空'); return; }
         const projectId = getProjectId();
         const body = {
             apiName,
@@ -313,30 +315,30 @@
         };
         try {
             const resp = await fetch(`/api/projects/${projectId}/apis/${editingApiId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-            if (!resp.ok) { showBanner(false, '更新接口失败'); return; }
+            if (!resp.ok) { showBanner(false, '更新失败，请稍后重试'); return; }
             closeEditModal();
             await loadApis();
             showBanner(true, '接口已更新');
-        } catch (e) { showBanner(false, '更新接口异常'); }
+        } catch (e) { showBanner(false, '更新异常，请稍后重试'); }
     }
     async function disableApi(id) {
         const projectId = getProjectId();
         try {
             const resp = await fetch(`/api/projects/${projectId}/apis/${id}`, { method: 'DELETE' });
-            if (!resp.ok) { showBanner(false, '禁用接口失败'); return; }
+            if (!resp.ok) { showBanner(false, '禁用失败，请稍后重试'); return; }
             await loadApis();
             showBanner(true, '接口已禁用');
-        } catch (e) { showBanner(false, '禁用接口异常'); }
+        } catch (e) { showBanner(false, '禁用异常，请稍后重试'); }
     }
     async function deleteApi(id) {
         if (!confirm('确定要删除该接口吗？')) return;
         const projectId = getProjectId();
         try {
             const resp = await fetch(`/api/projects/${projectId}/apis/${id}`, { method: 'DELETE' });
-            if (!resp.ok) { showBanner(false, '删除接口失败'); return; }
+            if (!resp.ok) { showBanner(false, '删除失败，请稍后重试'); return; }
             await loadApis();
             showBanner(true, '接口已删除');
-        } catch (e) { showBanner(false, '删除接口异常'); }
+        } catch (e) { showBanner(false, '删除异常，请稍后重试'); }
     }
     function openCreateApiModal() {
         document.getElementById('createApiModal').classList.add('show');
@@ -344,7 +346,16 @@
     function closeCreateApiModal() {
         document.getElementById('createApiModal').classList.remove('show');
     }
-    document.addEventListener('DOMContentLoaded', function() { loadApis(); });
+    document.addEventListener('DOMContentLoaded', function() {
+        loadApis();
+        var checkAll = document.getElementById('checkAllApis');
+        var tbody = document.getElementById('apiTbody');
+        if (checkAll && tbody) {
+            checkAll.addEventListener('change', function() {
+                tbody.querySelectorAll('.row-cb').forEach(function(cb) { cb.checked = checkAll.checked; });
+            });
+        }
+    });
 </script>
 </body>
 </html>

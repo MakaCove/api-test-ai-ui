@@ -15,13 +15,13 @@
 | 校验 | Spring Validation | 参数校验 |
 | 模板引擎 | Thymeleaf | 服务端渲染 |
 | 时间扩展 | thymeleaf-extras-java8time | 3.0.4（#temporals 等） |
-| ORM | MyBatis-Plus | 3.5.15（spring-boot3-starter） |
+| ORM | MyBatis-Plus | 3.5.15（spring-boot3-starter），分页需 mybatis-plus-jsqlparser |
 | 数据库 | MySQL | 5.7+ / 8.0+，驱动 mysql-connector-j |
 | 连接池 | HikariCP | Spring Boot 默认 |
 | AI 客户端 | openai-java | 2.12.0（兼容 OpenAI/通义千问等） |
 | 文档解析 | Apache POI | 5.2.5（poi-ooxml、poi-scratchpad） |
 | 工具 | Lombok | 简化实体与构造 |
-| 日志 | Logback | Spring Boot 默认，可配 logback-spring.xml |
+| 日志 | Logback（SLF4J） | Spring Boot 默认，可配 logback-spring.xml |
 
 ---
 
@@ -34,18 +34,20 @@ org.example
 ├── ApiTestAiUiApplication.java     # 启动类，@EnableConfigurationProperties(AiConfig.class)
 ├── config/                         # 配置
 │   ├── AiConfig.java               # ai.* 配置属性绑定
+│   ├── GlobalExceptionHandler.java # @RestControllerAdvice，统一 REST 错误响应 400/500，body {"message":"..."}
 │   ├── JacksonConfig.java          # LocalDateTime 序列化 yyyy-MM-dd HH:mm:ss
-│   ├── LayoutModelAdvice.java     # 全局注入 contextPath 供 Thymeleaf 使用
+│   ├── LayoutModelAdvice.java      # 全局注入 contextPath 供 Thymeleaf 使用
+│   ├── MybatisPlusConfig.java      # MyBatis-Plus 分页插件（PaginationInnerInterceptor）
 │   ├── SecurityConfig.java        # Spring Security 表单登录、放行路径、PasswordEncoder
-│   └── ThymeleafConfig.java       # 注册 Java8TimeDialect
+│   └── ThymeleafConfig.java        # 注册 Java8TimeDialect
 ├── common/
-│   ├── constant/AiPrompt.java     # AI 提示词常量（文档标准化、接口提取、用例生成、代码生成）
-│   └── ai/AiClientService.java    # 封装 AI 调用（endpoint、apiKey、model 可配置）
+│   ├── constant/AiPrompt.java      # AI 提示词常量（文档标准化、接口提取、用例生成、代码生成）
+│   └── ai/AiClientService.java     # 封装 AI 调用（endpoint、apiKey、model 可配置）
 ├── security/
 │   ├── CustomUserDetails.java
 │   ├── CustomUserDetailsService.java   # 按 username 查 User 转 UserDetails
 │   └── controller/AuthController.java  # /login、/register 页面与注册提交
-├── web/controller/HomeController.java  # /、/apis、/testcases、/testcases/detail/{id}、/testcases/{caseId}/code、/testcodes
+├── web/controller/HomeController.java  # /、/apis、/testcases、/testcases/detail/{id}、/testcases/{caseId}/code、/testcodes；工作台统计 fillDashboardStats
 ├── project/
 │   ├── controller/
 │   │   ├── ProjectController.java       # 页面：/projects、/projects/{id}、documents、apis
@@ -53,32 +55,32 @@ org.example
 │   ├── entity/Project.java
 │   └── mapper/ProjectMapper.java
 ├── document/
-│   ├── controller/DocumentApiController.java  # REST：/api/projects/{id}/documents
-│   ├── service/DocumentAnalyzeService.java    # 标准化 + 解析接口
+│   ├── controller/DocumentApiController.java  # REST：/api/projects/{id}/documents（粘贴、上传、分析等）
+│   ├── service/DocumentAnalyzeService.java   # 标准化 + 解析接口，文档状态维护
 │   ├── entity/Document.java
 │   └── mapper/DocumentMapper.java
 ├── api/
 │   ├── controller/
 │   │   ├── ApiPageController.java      # 页面：/projects/{pid}/apis/{apiId}/testcases
-│   │   └── ApiInfoApiController.java   # REST：/api/projects/{pid}/apis
-│   ├── entity/ApiInfo.java
+│   │   └── ApiInfoApiController.java   # REST：/api/projects/{pid}/apis（含 generate-cases）
+│   ├── entity/ApiInfo.java             # 含 case_gen_status
 │   └── mapper/ApiInfoMapper.java
 ├── testcase/
 │   ├── controller/TestCaseApiController.java  # REST：/api/apis/{apiId}/testcases
-│   ├── service/TestCaseGenerateService.java   # AI 生成用例
-│   ├── entity/TestCase.java
+│   ├── service/TestCaseGenerateService.java  # AI 生成用例
+│   ├── entity/TestCase.java                  # 含 code_gen_status
 │   └── mapper/TestCaseMapper.java
 ├── testcode/
 │   ├── controller/
 │   │   ├── TestCodePageController.java  # 页面：/projects/{pid}/apis/{apiId}/testcodes
-│   │   └── TestCodeApiController.java   # REST：/api/apis/{apiId}/testcodes
-│   ├── service/TestCodeGenerateService.java   # AI 生成代码
+│   │   └── TestCodeApiController.java   # REST：/api/apis/{apiId}/testcodes（单条生成、保存、下载）
+│   ├── service/TestCodeGenerateService.java  # 单条用例生成代码
 │   ├── entity/TestCode.java
 │   └── mapper/TestCodeMapper.java
 ├── settings/
 │   ├── controller/
 │   │   ├── SettingsPageController.java  # 页面：/settings
-│   │   └── SettingsApiController.java  # REST：/api/settings GET/PUT
+│   │   └── SettingsApiController.java   # REST：/api/settings GET/PUT
 │   ├── service/SettingsService.java     # 读写 t_system_setting
 │   ├── entity/SystemSetting.java
 │   └── mapper/SystemSettingMapper.java
@@ -97,7 +99,7 @@ src/main/resources/
 │   │   ├── login.html
 │   │   └── register.html
 │   ├── dashboard/
-│   │   └── index.html              # 工作台
+│   │   └── index.html              # 工作台（总数统计、各项目统计、快捷入口、最近列表）
 │   ├── project/
 │   │   ├── project-list.html
 │   │   ├── project-detail.html
@@ -106,18 +108,18 @@ src/main/resources/
 │   ├── api/
 │   │   └── apis.html               # 全局接口列表
 │   ├── testcase/
-│   │   ├── testcase-list.html      # 某接口下用例列表
+│   │   ├── testcase-list.html      # 某接口下用例列表（含批量生成代码）
 │   │   ├── testcase-detail.html    # 单条用例详情
-│   │   └── testcases.html         # 全局用例列表
+│   │   └── testcases.html          # 全局用例列表
 │   ├── testcode/
 │   │   ├── testcode-list.html      # 某接口下测试代码列表
-│   │   ├── testcode-case-detail.html  # 单条用例的代码详情
-│   │   └── testcodes.html         # 全局测试代码列表
+│   │   ├── testcode-case-detail.html  # 单条用例的代码详情（含基本信息区）
+│   │   └── testcodes.html          # 全局测试代码列表
 │   └── settings/
 │       └── settings.html
 ├── static/
 │   └── css/
-│       └── layout.css              # 全局样式（侧栏、卡片、按钮、分页等）
+│       └── layout.css              # 全局样式（侧栏、卡片、按钮、分页、操作列固定、横向滚动等）
 ├── schema/
 │   ├── schema.sql                  # 全量建表
 │   └── migration_soft_delete.sql   # 软删除等迁移（若有）
@@ -127,6 +129,7 @@ src/main/resources/
 
 - 页面通过 `th:replace="~{layout :: sidebar(activeKey)}"` 引入统一侧栏。
 - 列表与表单通过原生 JavaScript 调用 `/api/*` 获取数据、分页、提交；无单独前端工程。
+- 列表统一：操作列固定右侧、内容区横向滚动、勾选列与全选（部分页面用于批量生成代码）。
 
 ---
 
@@ -167,7 +170,14 @@ src/main/resources/
 
 除特别说明外，均为 JSON；列表类统一支持 `page`、`size`（默认 10），返回结构含 `records`、`total`、`page`、`size`。
 
-### 4.1 认证与用户
+### 4.1 统一错误响应
+
+- 由 **GlobalExceptionHandler**（@RestControllerAdvice）统一处理：
+  - `IllegalArgumentException`、`IllegalStateException`、`MethodArgumentNotValidException` → **400 Bad Request**，body `{"message": "..."}`（校验错误时 message 为字段级拼接）。
+  - 其他 `Exception` → **500 Internal Server Error**，body `{"message": "服务异常，请稍后重试"}`，内部打日志不向前端暴露堆栈。
+- 前端可统一根据 HTTP 状态码与 body.message 做提示。
+
+### 4.2 认证与用户
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -176,29 +186,29 @@ src/main/resources/
 | POST | /register | 注册提交（username、password 等） |
 | POST | /logout | 登出（Spring Security） |
 
-### 4.2 项目
+### 4.3 项目
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | /api/projects | 分页列表，按创建时间倒序 |
 | POST | /api/projects | 新建项目（body: name、description） |
 
-### 4.3 文档（项目下）
+### 4.4 文档（项目下）
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | /api/projects/{projectId}/documents | 分页列表 |
 | POST | /api/projects/{projectId}/documents/text | 粘贴保存（body: title、content） |
 | POST | /api/projects/{projectId}/documents/upload | 上传文件（file、可选 title） |
-| POST | /api/projects/{projectId}/documents/{documentId}/analyze | AI 提取接口信息 |
+| POST | /api/projects/{projectId}/documents/{documentId}/analyze | AI 提取接口信息（先置状态再异步解析） |
 | PUT | /api/projects/{projectId}/documents/{documentId} | 重命名（body: title） |
 | DELETE | /api/projects/{projectId}/documents/{documentId} | 删除文档 |
 
-### 4.4 接口（项目下）
+### 4.5 接口（项目下）
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
-| GET | /api/projects/{projectId}/apis | 分页列表（含用例数等） |
+| GET | /api/projects/{projectId}/apis | 分页列表（含用例数、所属文档标题、case_gen_status 等） |
 | POST | /api/projects/{projectId}/apis | 新建接口 |
 | GET | /api/projects/{projectId}/apis/{id} | 接口详情 |
 | PUT | /api/projects/{projectId}/apis/{id} | 更新接口（弹窗编辑） |
@@ -207,29 +217,30 @@ src/main/resources/
 | PATCH | /api/projects/{projectId}/apis/{id}/enable | 启用接口 |
 | DELETE | /api/projects/{projectId}/apis/{id} | 删除接口 |
 
-### 4.5 测试用例（接口下）
+### 4.6 测试用例（接口下）
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | /api/apis/{apiId}/testcases | 分页列表（过滤 deleted_at） |
-| POST | /api/apis/{apiId}/testcases | 新建用例 |
+| POST | /api/apis/{apiId}/testcases | 新建用例（默认 status=active、code_gen_status=pending） |
 | GET | /api/apis/{apiId}/testcases/{id} | 用例详情 |
 | PUT | /api/apis/{apiId}/testcases/{id} | 更新用例 |
 | PATCH | /api/apis/{apiId}/testcases/{id}/disable | 禁用用例 |
 | PATCH | /api/apis/{apiId}/testcases/{id}/enable | 启用用例 |
 | DELETE | /api/apis/{apiId}/testcases/{id} | 软删用例（设置 deleted_at） |
 
-### 4.6 测试代码（接口下）
+### 4.7 测试代码（接口下）
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
 | GET | /api/apis/{apiId}/testcodes | 分页列表（过滤 deleted_at） |
-| POST | /api/apis/{apiId}/testcodes | 批量生成该接口下所有用例的测试代码（先软删再插入） |
-| POST | /api/apis/{apiId}/testcodes/generate-case/{testCaseId} | 为单条用例生成一条测试代码（先软删该用例原代码） |
+| POST | /api/apis/{apiId}/testcodes/generate-case/{testCaseId} | 为单条用例生成一条测试代码（先软删该用例原代码）；异步，更新用例 code_gen_status |
 | POST | /api/apis/{apiId}/testcodes/{id}/save | 保存到本地工程（使用配置的 base-dir、base-package） |
 | GET | /api/apis/{apiId}/testcodes/{id}/download | 下载 .java 文件 |
 
-### 4.7 系统配置
+说明：批量生成由前端在用例列表页勾选多条用例后，多次调用上述单条生成接口实现；接口维度测试代码列表页不再提供批量生成接口。
+
+### 4.8 系统配置
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
@@ -252,7 +263,7 @@ src/main/resources/
 | /apis | 全局接口列表 |
 | /testcases | 全局用例列表 |
 | /testcases/detail/{id} | 单条用例详情 |
-| /testcases/{caseId}/code | 单条用例的代码详情（可在此页生成） |
+| /testcases/{caseId}/code | 单条用例的代码详情（可在此页生成/重新生成） |
 | /testcodes | 全局测试代码列表 |
 | /settings | 系统配置 |
 
@@ -263,24 +274,24 @@ src/main/resources/
 ### 6.1 文档 → 接口
 
 - **DocumentAnalyzeService**
-  - `generateStandardizedContent(projectId, documentId)`：根据文档原文调 AI 生成标准化内容，写回 `t_document.standardized_content`。
-  - `analyzeAndGenerateApis(projectId, documentId)`：读取标准化内容，调 AI 解析为接口列表 JSON，写入 `t_api_info`（关联 project_id、document_id）。
-- 文档保存（粘贴/上传）后自动调用标准化；「AI提取接口信息」由用户点击触发，调用解析并写库。
+  - `generateStandardizedContent(projectId, documentId)`：根据文档原文调 AI 生成标准化内容，写回 `t_document.standardized_content`（异步）。
+  - `analyzeAndGenerateApis(projectId, documentId)`：读取标准化内容，调 AI 解析为接口列表 JSON，写入 `t_api_info`（关联 project_id、document_id）；维护文档 status（extracting→done/failed），异步执行。
+- 文档保存（粘贴/上传）后自动调用标准化；「AI提取接口信息」由用户点击触发，先置状态再异步解析并写库。
 
 ### 6.2 接口 → 用例
 
 - **TestCaseGenerateService.generateForApi(projectId, apiId)**
-  - 在事务外调 AI 生成用例 JSON 数组。
+  - 在事务外调 AI 生成用例 JSON 数组；接口 case_gen_status 置为 generating，完成后更新为 done/failed。
   - 在短事务内：软删该接口下原有用例（更新 deleted_at），再逐条插入新用例。
 - 避免长事务持锁导致锁等待超时。
 
 ### 6.3 用例 → 测试代码
 
 - **TestCodeGenerateService**
-  - `generateForApi(apiId)`：对该接口下所有用例逐条调 AI 生成代码，短事务内软删该接口下原有代码再插入新记录。
-  - `generateForTestCase(apiId, testCaseId)`：对单条用例生成一条代码，短事务内软删该用例原有代码再插入。
+  - `generateForTestCase(apiId, testCaseId)`（单条）：对单条用例调 AI 生成代码；短事务内软删该用例原有代码再插入；更新 `t_test_case.code_gen_status` 为 generating→done/failed。
 - 一条用例对应一条 `t_test_code` 记录（test_case_id 关联）。
 - 保存到工程：读取 `t_system_setting` 中 `code.base-dir`、`code.base-package` 写文件。
+- 批量生成：前端在用例列表（全局或某接口下）勾选多条用例，多次调用单条生成接口。
 
 ### 6.4 AI 调用
 
@@ -298,9 +309,9 @@ src/main/resources/
 |------|------|
 | t_user | 用户（username 唯一，password 加密） |
 | t_project | 项目（deleted 逻辑删除） |
-| t_document | 文档（project_id、original_content、standardized_content、status） |
-| t_api_info | 接口（project_id、document_id、request_params、response_schema、status） |
-| t_test_case | 测试用例（project_id、api_id、deleted_at 软删） |
+| t_document | 文档（project_id、original_content、standardized_content、status、error_message） |
+| t_api_info | 接口（project_id、document_id、request_params、response_schema、status、case_gen_status） |
+| t_test_case | 测试用例（project_id、api_id、code_gen_status、deleted_at 软删） |
 | t_test_code | 测试代码（project_id、api_id、test_case_id、deleted_at 软删） |
 | t_system_setting | 系统配置（config_key、config_value） |
 
@@ -310,19 +321,21 @@ src/main/resources/
 - 常用查询索引：project_id、document_id、api_id、test_case_id；(api_id, deleted_at) 等组合索引以支持列表过滤。
 - 建表脚本见 `src/main/resources/schema/schema.sql`；字符集 utf8mb4。
 
-### 7.3 软删除约定
+### 7.3 软删除与状态约定
 
-- **t_test_case**：deleted_at 非空表示已删，列表与详情查询条件 `deleted_at IS NULL`。
-- **t_test_code**：同上。
+- **t_test_case**：deleted_at 非空表示已删，列表与详情查询条件 `deleted_at IS NULL`；code_gen_status：pending/generating/done/failed。
+- **t_test_code**：同上软删。
 - **t_project**：deleted=1 表示已删，列表过滤 deleted=0。
+- **t_document**：status：pending/standardized/extracting/done/failed。
+- **t_api_info**：case_gen_status：pending/generating/done/failed。
 
 ---
 
 ## 八、日志
 
-- 使用 Logback；可通过 `logback-spring.xml` 配置控制台与文件输出、按日滚动、保留天数。
+- 使用 Logback（SLF4J）；可通过 `logback-spring.xml` 配置控制台与文件输出、按日滚动、保留天数。
 - 应用日志输出到 `logs/application.log`（路径可由 logging.file.name 修改）。
-- 建议：关键操作（注册、登录、文档保存、AI 调用、用例/代码生成）打 INFO/DEBUG；异常与失败打 WARN/ERROR；不记录敏感信息。
+- 建议：关键操作（注册、登录、文档保存、AI 调用、用例/代码生成）打 INFO/DEBUG；异常与失败打 WARN/ERROR；GlobalExceptionHandler 对 500 打 ERROR 日志，不向前端暴露堆栈。
 
 ---
 
@@ -368,3 +381,4 @@ mvn spring-boot:run
 - **新增配置项**：在 t_system_setting 存 key-value，SettingsService 读取；前端在系统配置页增加表单项并调用 PUT /api/settings。
 - **Thymeleaf 公共片段**：除 layout 的 sidebar 外，可在 layout.html 或单独片段中增加 header、footer 等，各页 th:replace 引入。
 - **列表过滤与排序**：在现有 GET 列表接口上增加请求参数（如 keyword、status），在 Mapper 的 QueryWrapper 中拼接条件即可。
+- **新增异常类型**：在 GlobalExceptionHandler 中增加 @ExceptionHandler，返回合适状态码与 body。
